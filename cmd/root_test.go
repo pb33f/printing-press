@@ -60,6 +60,23 @@ func TestRootCommand_DefaultBasePathUsesSpecDirectory(t *testing.T) {
 	assert.FileExists(t, filepath.Join(outputDir, "models", "schemas", "widget.json"))
 }
 
+func TestRootCommand_LocalSpecPathIsForwardedToSourceMetadata(t *testing.T) {
+	specDir := t.TempDir()
+	specPath := filepath.Join(specDir, "sailpoint.yaml")
+	require.NoError(t, os.WriteFile(specPath, []byte(singleFileSpecYAML), 0o644))
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, _ := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--output", outputDir, specPath})
+
+	require.NoError(t, cmd.Execute())
+	llmBytes, err := os.ReadFile(filepath.Join(outputDir, "operations", "list-burgers.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(llmBytes), filepath.Base(specPath)+":")
+	assert.NotContains(t, string(llmBytes), "openapi.yaml:")
+}
+
 func TestRootCommand_SkipFlags(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -147,6 +164,27 @@ func TestRootCommand_ServeUsesRenderedOutput(t *testing.T) {
 	assert.FileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.json"))
 	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.js"))
 	assert.Contains(t, stdout.String(), "serving http://127.0.0.1:9191")
+}
+
+func TestRootCommand_PublishBuildsServedAssetsWithoutStartingServer(t *testing.T) {
+	specPath := writeSingleFileSpec(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, stdout, _ := newTestApplication(t)
+
+	serverCalled := false
+	app.serveFn = func(addr, dir string) error {
+		serverCalled = true
+		return nil
+	}
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--publish", "--output", outputDir, specPath})
+
+	require.NoError(t, cmd.Execute())
+	assert.False(t, serverCalled)
+	assert.FileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.json"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.js"))
+	assert.NotContains(t, stdout.String(), "serving http://127.0.0.1")
 }
 
 func TestRootCommand_NoLogoSuppressesBanner(t *testing.T) {

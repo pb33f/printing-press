@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	lipgloss "charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/pb33f/doctor/printingpress"
 	ppmodel "github.com/pb33f/doctor/printingpress/model"
 	"github.com/pb33f/doctor/terminal"
@@ -50,6 +50,7 @@ type rootOptions struct {
 	noHTML    bool
 	noLLM     bool
 	noJSON    bool
+	publish   bool
 	serve     bool
 	port      int
 }
@@ -57,6 +58,7 @@ type rootOptions struct {
 type sourceInput struct {
 	specBytes []byte
 	basePath  string
+	specPath  string
 }
 
 type cliError struct {
@@ -107,7 +109,7 @@ func (a *application) newRootCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "printing-press",
-		Short:         "Render OpenAPI docs with the doctor printing press.",
+		Short:         "Print world class, fast, modern and LLM ready OpenAPI docs with the pb33f printing press",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ArbitraryArgs,
@@ -125,6 +127,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.noHTML, "no-html", false, "Skip HTML output")
 	cmd.Flags().BoolVar(&opts.noLLM, "no-llm", false, "Skip LLM output")
 	cmd.Flags().BoolVar(&opts.noJSON, "no-json", false, "Skip JSON artifact output")
+	cmd.Flags().BoolVar(&opts.publish, "publish", false, "Build hosted/served HTML assets without starting a local server")
 	cmd.Flags().BoolVar(&opts.serve, "serve", false, "Serve the rendered output after building")
 	cmd.Flags().IntVar(&opts.port, "port", 9090, "Port to use with --serve")
 
@@ -151,7 +154,7 @@ func (a *application) runRoot(args []string, opts *rootOptions) error {
 	if len(args) > 1 {
 		return &cliError{
 			message: "expected exactly one spec path or URL",
-			hint:    "Try 'printing-press ./openapi.yaml' or 'printing-press --serve ./openapi.yaml'.",
+			hint:    "Try 'printing-press ./openapi.yaml', 'printing-press --publish ./openapi.yaml', or 'printing-press --serve ./openapi.yaml'.",
 			detail:  fmt.Sprintf("received %d arguments", len(args)),
 		}
 	}
@@ -196,7 +199,7 @@ func (a *application) runBuild(specArg string, opts *rootOptions, palette termin
 	}
 
 	assetMode := printingpress.HTMLAssetModePortable
-	if opts.serve {
+	if opts.publish || opts.serve {
 		assetMode = printingpress.HTMLAssetModeServed
 	}
 
@@ -204,6 +207,7 @@ func (a *application) runBuild(specArg string, opts *rootOptions, palette termin
 		Title:     opts.title,
 		BaseURL:   opts.baseURL,
 		BasePath:  source.basePath,
+		SpecPath:  source.specPath,
 		OutputDir: outputDir,
 		AssetMode: assetMode,
 	})
@@ -339,6 +343,7 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Examples:"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --publish --output ./api-docs ./openapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --serve --output ./api-docs ./openapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press https://example.com/openapi.yaml"))
 	fmt.Fprintln(a.stdout)
@@ -431,7 +436,7 @@ func (a *application) loadRemoteSource(rawURL, basePathFlag string) (*sourceInpu
 		return nil, err
 	}
 
-	return &sourceInput{specBytes: specBytes, basePath: basePath}, nil
+	return &sourceInput{specBytes: specBytes, basePath: basePath, specPath: rawURL}, nil
 }
 
 func (a *application) loadLocalSource(specPath, basePathFlag string) (*sourceInput, error) {
@@ -455,7 +460,7 @@ func (a *application) loadLocalSource(specPath, basePathFlag string) (*sourceInp
 		return nil, err
 	}
 
-	return &sourceInput{specBytes: specBytes, basePath: resolvedBasePath}, nil
+	return &sourceInput{specBytes: specBytes, basePath: resolvedBasePath, specPath: absPath}, nil
 }
 
 func normalizeBasePath(basePath string) (string, error) {
