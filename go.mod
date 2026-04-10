@@ -1,6 +1,6 @@
 module github.com/pb33f/printing-press
 
-go 1.25.0
+go 1.26.0
 
 require (
 	charm.land/bubbles/v2 v2.0.0
