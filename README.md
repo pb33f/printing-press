@@ -3,56 +3,32 @@
 # Printing Press
 
 ---
-> Important: this tool is currently a preview and is not intended for production use.
+> [!WARNING]
+> Important: this tool is currently in preview and is not intended for production use. 
 ---
 
-A CLI for rendering OpenAPI documentation with the pb33f printing press. 
+OpenAPI Documentation that is: 
 
-Super high quality, detailed, rich, fast, offline, instant complete OpenAPI documentation.
+- High Quality
+- Designed for Agents and Humans
+- Beautiful & Clean
+- Detailed & Rich
+- Fast & Offline
+- Instant & Complete
 
-## Installation
+## Run directly from source
 
 ```bash
-go install github.com/pb33f/printing-press@latest
+go run printing-press.go path/to/openapi.yaml
 ```
 
-Or run directly from source:
+## Building from source
+
+Build the CLI directly with Go:
 
 ```bash
-go run printing-press.go ./openapi.yaml
-```
-
-## Building From Source
-
-For maintainers working in the pb33f workspace, the wrapper build needs fresh templates and browser assets from `doctor/printingpress` before compiling this CLI.
-Use the Makefile in this repo for that development workflow:
-
-```bash
-make
-```
-
-That default build does three things:
-
-- runs `templ` generation for `doctor/printingpress`
-- installs UI dependencies and rebuilds the docs UI bundle for `doctor/printingpress`
-- builds the `printing-press` wrapper CLI binary in this repo
-
-Useful targets:
-
-```bash
-make build
-make build-ui
-make templ
-```
-
-- `make build`: full wrapper build with template generation and UI rebuild first
-- `make build-ui`: install UI deps and rebuild the browser bundle only
-- `make templ`: regenerate `templ` output only
-
-This is a repository development flow. Normal end-user installation remains:
-
-```bash
-go install github.com/pb33f/printing-press@latest
+go build ./...
+go run printing-press.go path/to/openapi.yaml
 ```
 
 ## Usage
@@ -67,10 +43,10 @@ Examples:
 printing-press ./openapi.yaml
 printing-press --publish --output ./api-docs ./openapi.yaml
 printing-press --serve --output ./api-docs ./openapi.yaml
-printing-press --theme light ./openapi.yaml
+printing-press --theme roger ./openapi.yaml
 ```
 
-## Build Modes
+## Build modes
 
 - Default: builds portable HTML assets intended for offline or `file://` usage
 - `--publish`: builds hosted/served HTML assets for static hosting, but does not start a server
@@ -88,13 +64,13 @@ By default, the CLI renders:
 
 You can disable any of these with the `--no-*` flags.
 
-## Basic Flags
+## Basic flags
 
 - `--output`, `-o`: Output directory for rendered docs
 - `--title`: Override the API title
 - `--base-url`: Base URL to use in generated HTML
 - `--base-path`: Base path for resolving local file references
-- `--theme`: Terminal theme: `dark`, `light`, or `tektronix`
+- `--theme`: Terminal theme: `dark`, `roger`, or `tektronix`
 - `--no-logo`, `-b`: Disable the banner
 - `--no-html`: Skip HTML output
 - `--no-llm`: Skip LLM output
@@ -104,7 +80,7 @@ You can disable any of these with the `--no-*` flags.
 - `--port`: Port to use with `--serve`
 - `--help`: Show all options
 
-## Local Preview
+## Local preview
 
 ```bash
 printing-press --serve --output ./api-docs ./openapi.yaml
@@ -112,7 +88,7 @@ printing-press --serve --output ./api-docs ./openapi.yaml
 
 This starts a local development preview server at `http://127.0.0.1:9090` by default.
 
-## Static Hosting
+## Static hosting
 
 ```bash
 printing-press --publish --output ./api-docs ./openapi.yaml

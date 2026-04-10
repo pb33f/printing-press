@@ -122,7 +122,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.title, "title", "", "Override the API title")
 	cmd.Flags().StringVar(&opts.baseURL, "base-url", "", "Base URL to use in generated HTML")
 	cmd.Flags().StringVar(&opts.basePath, "base-path", "", "Base path for resolving local file references")
-	cmd.Flags().StringVar(&opts.theme, "theme", string(terminal.ThemeDark), "Terminal theme: dark, light, or tektronix")
+	cmd.Flags().StringVar(&opts.theme, "theme", string(terminal.ThemeDark), "Terminal theme: dark, roger, or tektronix")
 	cmd.Flags().BoolVarP(&opts.noLogo, "no-logo", "b", false, "Disable the pb33f banner")
 	cmd.Flags().BoolVar(&opts.noHTML, "no-html", false, "Skip HTML output")
 	cmd.Flags().BoolVar(&opts.noLLM, "no-llm", false, "Skip LLM output")
@@ -141,7 +141,7 @@ func (a *application) runRoot(args []string, opts *rootOptions) error {
 	if err != nil {
 		return &cliError{
 			message: "invalid terminal theme",
-			hint:    "Use --theme dark, --theme light, or --theme tektronix.",
+			hint:    "Use --theme dark, --theme roger, or --theme tektronix.",
 			detail:  err.Error(),
 		}
 	}
@@ -355,12 +355,12 @@ func parseTheme(raw string) (terminal.ThemeName, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", string(terminal.ThemeDark):
 		return terminal.ThemeDark, nil
-	case string(terminal.ThemeLight):
+	case "roger", string(terminal.ThemeLight):
 		return terminal.ThemeLight, nil
 	case string(terminal.ThemeTektronix):
 		return terminal.ThemeTektronix, nil
 	default:
-		return "", fmt.Errorf("invalid theme %q: expected dark, light, or tektronix", raw)
+		return "", fmt.Errorf("invalid theme %q: expected dark, roger, or tektronix", raw)
 	}
 }
 

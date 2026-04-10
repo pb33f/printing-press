@@ -19,20 +19,14 @@ When changing browser-rendered docs behavior, expect the main implementation to 
 
 ## Building From Source
 
-For wrapper development inside the pb33f workspace, the browser templates and UI assets are generated from the `doctor/printingpress` codebase before building this CLI.
-Use the Makefile here instead of calling `go build` directly:
+Build this repo directly with Go:
 
 ```bash
-make
+go build ./...
+go run printing-press.go ./openapi.yaml
 ```
 
-Useful targets:
-
-- `make` or `make build`: run template generation, rebuild the UI assets from `doctor/printingpress`, then build the wrapper CLI binary
-- `make build-ui`: install UI dependencies and rebuild the UI bundle from `doctor/printingpress`
-- `make templ`: regenerate `templ` output for `doctor/printingpress`
-
-This is a maintainer build step for the workspace. It is not part of normal end-user installation via `go install`.
+There is no wrapper-owned UI rebuild or template-generation step here. Those are the responsibility of `pb33f/doctor`, not this CLI repo.
 
 ## Build Modes
 
