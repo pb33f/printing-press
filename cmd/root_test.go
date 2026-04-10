@@ -200,6 +200,16 @@ func TestRootCommand_NoLogoSuppressesBanner(t *testing.T) {
 	assert.NotContains(t, stdout.String(), "https://pb33f.io/printing-press/")
 }
 
+func TestParseTheme_RogerAlias(t *testing.T) {
+	theme, err := parseTheme("roger")
+	require.NoError(t, err)
+	assert.Equal(t, terminal.ThemeLight, theme)
+
+	theme, err = parseTheme("light")
+	require.NoError(t, err)
+	assert.Equal(t, terminal.ThemeLight, theme)
+}
+
 func TestRootCommand_InvalidInputPathFails(t *testing.T) {
 	app, _, _ := newTestApplication(t)
 	cmd := app.newRootCommand()

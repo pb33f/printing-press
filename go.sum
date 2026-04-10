@@ -71,8 +71,8 @@ github.com/mattn/go-runewidth v0.0.20 h1:WcT52H91ZUAwy8+HUkdM3THM6gXqXuLJi9O3rjc
 github.com/mattn/go-runewidth v0.0.20/go.mod h1:XBkDxAl56ILZc9knddidhrOlY5R/pDhgLpndooCuJAs=
 github.com/muesli/cancelreader v0.2.2 h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELUXHmA=
 github.com/muesli/cancelreader v0.2.2/go.mod h1:3XuTXfFS2VjM+HTLZY9Ak0l6eUKfijIfMUZ4EgX0QYo=
-github.com/pb33f/doctor v0.0.50-0.20260409222730-079ec2eabb6f h1:Ue+TiRiveFFzrXcGZK287qY+WBYKNUueLHMA5I6L0qM=
-github.com/pb33f/doctor v0.0.50-0.20260409222730-079ec2eabb6f/go.mod h1:329QoquGIy92nT6zdUh1SKg0Y7APJgdc+UIW63w11oo=
+github.com/pb33f/doctor v0.0.50-0.20260410002840-ff3e7a0ac866 h1:6eoiqM+EbgESTcAheIBzqG+LUgfHlflNz34YyrFjUV8=
+github.com/pb33f/doctor v0.0.50-0.20260410002840-ff3e7a0ac866/go.mod h1:329QoquGIy92nT6zdUh1SKg0Y7APJgdc+UIW63w11oo=
 github.com/pb33f/jsonpath v0.8.2 h1:Ou4C7zjYClBm97dfZjDCjdZGusJoynv/vrtiEKNfj2Y=
 github.com/pb33f/jsonpath v0.8.2/go.mod h1:zBV5LJW4OQOPatmQE2QdKpGQJvhDTlE5IEj6ASaRNTo=
 github.com/pb33f/libopenapi v0.35.2-0.20260409193636-4a0f1b05a6ce h1:ef+ibfoemo8pcNL9lypk/6f3xxtBLLjniYPr3moNI+E=
