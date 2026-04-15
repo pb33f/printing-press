@@ -305,9 +305,11 @@ func TestRootCommand_ServeUsesRenderedOutput(t *testing.T) {
 
 	var servedAddr string
 	var servedDir string
-	app.serveFn = func(addr, dir string) error {
+	var servedBaseURL string
+	app.serveFn = func(addr, dir, baseURL string) error {
 		servedAddr = addr
 		servedDir = dir
+		servedBaseURL = baseURL
 		_, err := os.Stat(filepath.Join(dir, "index.html"))
 		return err
 	}
@@ -318,9 +320,28 @@ func TestRootCommand_ServeUsesRenderedOutput(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	assert.Equal(t, ":9191", servedAddr)
 	assert.Equal(t, outputDir, servedDir)
+	assert.Empty(t, servedBaseURL)
 	assert.FileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.json"))
 	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.js"))
 	assert.Contains(t, stdout.String(), "serving http://127.0.0.1:9191")
+}
+
+func TestRootCommand_ServeForwardsBaseURL(t *testing.T) {
+	specPath := writeSingleFileSpec(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, _ := newTestApplication(t)
+
+	var servedBaseURL string
+	app.serveFn = func(addr, dir, baseURL string) error {
+		servedBaseURL = baseURL
+		return nil
+	}
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--serve", "--base-url", "/docs/", "--output", outputDir, specPath})
+
+	require.NoError(t, cmd.Execute())
+	assert.Equal(t, "/docs/", servedBaseURL)
 }
 
 func TestRootCommand_PublishBuildsServedAssetsWithoutStartingServer(t *testing.T) {
@@ -329,7 +350,7 @@ func TestRootCommand_PublishBuildsServedAssetsWithoutStartingServer(t *testing.T
 	app, stdout, _ := newTestApplication(t)
 
 	serverCalled := false
-	app.serveFn = func(addr, dir string) error {
+	app.serveFn = func(addr, dir, baseURL string) error {
 		serverCalled = true
 		return nil
 	}
@@ -383,7 +404,7 @@ func TestStaticServer_CompressesJavaScriptAndSetsLongCache(t *testing.T) {
 	require.NoError(t, os.MkdirAll(staticDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(staticDir, "printing-press.js"), []byte("console.log('burger');"), 0o644))
 
-	server := httptest.NewServer(newStaticServer(dir))
+	server := httptest.NewServer(newStaticServer(dir, ""))
 	defer server.Close()
 
 	req, err := http.NewRequest(http.MethodGet, server.URL+"/static/printing-press.js", nil)
@@ -414,7 +435,7 @@ func TestStaticServer_UsesRevalidatingCacheForHTMLAndPageData(t *testing.T) {
 	require.NoError(t, os.MkdirAll(pageDataDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(pageDataDir, "burger.json"), []byte(`{"ok":true}`), 0o644))
 
-	server := httptest.NewServer(newStaticServer(dir))
+	server := httptest.NewServer(newStaticServer(dir, ""))
 	defer server.Close()
 
 	htmlResp, err := server.Client().Get(server.URL + "/index.html")
@@ -428,13 +449,50 @@ func TestStaticServer_UsesRevalidatingCacheForHTMLAndPageData(t *testing.T) {
 	assert.Equal(t, "no-cache", dataResp.Header.Get("Cache-Control"))
 }
 
+func TestStaticServer_MountsUnderBasePath(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>burger</title>"), 0o644))
+	staticDir := filepath.Join(dir, "static")
+	require.NoError(t, os.MkdirAll(staticDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(staticDir, "printing-press.css"), []byte("body{}"), 0o644))
+
+	server := httptest.NewServer(newStaticServer(dir, "/docs/"))
+	defer server.Close()
+
+	redirectClient := *server.Client()
+	redirectClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	rootResp, err := redirectClient.Get(server.URL + "/")
+	require.NoError(t, err)
+	defer rootResp.Body.Close()
+	assert.Equal(t, http.StatusTemporaryRedirect, rootResp.StatusCode)
+	assert.Equal(t, "/docs/", rootResp.Header.Get("Location"))
+
+	indexResp, err := server.Client().Get(server.URL + "/docs/index.html")
+	require.NoError(t, err)
+	defer indexResp.Body.Close()
+	assert.Equal(t, http.StatusOK, indexResp.StatusCode)
+
+	cssResp, err := server.Client().Get(server.URL + "/docs/static/printing-press.css")
+	require.NoError(t, err)
+	defer cssResp.Body.Close()
+	assert.Equal(t, http.StatusOK, cssResp.StatusCode)
+
+	notFoundResp, err := server.Client().Get(server.URL + "/index.html")
+	require.NoError(t, err)
+	defer notFoundResp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, notFoundResp.StatusCode)
+}
+
 func TestStaticServer_CompressesMarkdownAndYAML(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "llms-full.txt"), []byte("docs"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.md"), []byte("# burger"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "openapi.yaml"), []byte("openapi: 3.1.0\n"), 0o644))
 
-	server := httptest.NewServer(newStaticServer(dir))
+	server := httptest.NewServer(newStaticServer(dir, ""))
 	defer server.Close()
 
 	for _, path := range []string{"/notes.md", "/openapi.yaml"} {
