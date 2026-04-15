@@ -31,7 +31,7 @@ type application struct {
 	stdout     io.Writer
 	stderr     io.Writer
 	httpClient *http.Client
-	serveFn    func(addr, dir string) error
+	serveFn    func(addr, dir, baseURL string) error
 }
 
 type buildLoggerSession struct {
@@ -316,7 +316,7 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 
 	if opts.serve {
 		fmt.Fprintf(a.stdout, "serving http://127.0.0.1:%d from %s\n", opts.port, site.OutputDir)
-		if err := a.serveFn(fmt.Sprintf(":%d", opts.port), site.OutputDir); err != nil {
+		if err := a.serveFn(fmt.Sprintf(":%d", opts.port), site.OutputDir, site.BaseURL); err != nil {
 			return &cliError{message: "unable to serve rendered output", detail: err.Error()}
 		}
 	}
@@ -660,15 +660,42 @@ func humanBytes(size int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(size)/float64(div), "KMGTPE"[exp])
 }
 
-func serveOutputDir(addr, dir string) error {
-	return http.ListenAndServe(addr, newStaticServer(dir))
+func serveOutputDir(addr, dir, baseURL string) error {
+	return http.ListenAndServe(addr, newStaticServer(dir, baseURL))
 }
 
-func newStaticServer(dir string) http.Handler {
+func newStaticServer(dir, baseURL string) http.Handler {
+	fileServer := newStaticFileServer(dir)
+	mountPath := resolveServeMountPath(baseURL)
+	if mountPath == "/" {
+		return fileServer
+	}
+
+	mountPrefix := strings.TrimSuffix(mountPath, "/")
+	mountedFileServer := http.StripPrefix(mountPrefix, fileServer)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			http.Redirect(w, r, mountPath, http.StatusTemporaryRedirect)
+			return
+		case mountPrefix:
+			http.Redirect(w, r, mountPath, http.StatusTemporaryRedirect)
+			return
+		}
+		if !strings.HasPrefix(r.URL.Path, mountPath) {
+			http.NotFound(w, r)
+			return
+		}
+		mountedFileServer.ServeHTTP(w, r)
+	})
+}
+
+func newStaticFileServer(dir string) http.Handler {
 	fileServer := http.FileServer(http.Dir(dir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		applyServeCacheHeaders(w.Header(), r.URL.Path)
-		if !shouldGzipResponse(r) || !isCompressibleAsset(r.URL.Path) {
+		requestPath := r.URL.Path
+		applyServeCacheHeaders(w.Header(), requestPath)
+		if !shouldGzipResponse(r) || !isCompressibleAsset(requestPath) {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
@@ -682,6 +709,29 @@ func newStaticServer(dir string) http.Handler {
 
 		fileServer.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, writer: gzw}, r)
 	})
+}
+
+func resolveServeMountPath(baseURL string) string {
+	if baseURL == "" {
+		return "/"
+	}
+
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return "/"
+	}
+
+	path := parsed.Path
+	if path == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(path, "/") {
+		return "/"
+	}
+	if path != "/" && !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+	return path
 }
 
 type gzipResponseWriter struct {
