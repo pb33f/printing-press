@@ -12,7 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/pb33f/doctor/printingpress"
 	"github.com/pb33f/doctor/terminal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,6 +29,16 @@ func TestRootCommand_NoArgsShowsWelcome(t *testing.T) {
 	assert.Contains(t, stdout.String(), "https://pb33f.io/printing-press/")
 	assert.Contains(t, stdout.String(), "Welcome! To render docs")
 	assert.Contains(t, stdout.String(), "printing-press ./openapi.yaml")
+}
+
+func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {
+	app, stdout, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--help"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stdout.String(), "--debug")
+	assert.Contains(t, stdout.String(), "stream build logs live")
 }
 
 func TestRootCommand_DefaultBuildWritesAllOutputs(t *testing.T) {
@@ -46,6 +58,20 @@ func TestRootCommand_DefaultBuildWritesAllOutputs(t *testing.T) {
 	assert.Contains(t, stdout.String(), "Output")
 	assert.Contains(t, stdout.String(), outputDir)
 	assert.Contains(t, stdout.String(), "render complete")
+}
+
+func TestRootCommand_DebugStreamsActivityLogs(t *testing.T) {
+	specPath := writeSingleFileSpec(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, stderr := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--debug", "--output", outputDir, specPath})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stderr.String(), "building libopenapi document")
+	assert.Contains(t, stderr.String(), "building v3 model")
+	assert.Contains(t, stderr.String(), "JSON complete")
 }
 
 func TestRootCommand_DefaultBasePathUsesSpecDirectory(t *testing.T) {
@@ -414,7 +440,7 @@ func TestRenderCommandError_UsesStyledPrefixAndHint(t *testing.T) {
 
 func TestConfigureBuildLogger_UsesPrettyLogger(t *testing.T) {
 	app, _, stderr := newTestApplication(t)
-	session := app.configureBuildLogger(terminal.PaletteForTheme(terminal.ThemeDark))
+	session := app.configureBuildLogger(terminal.PaletteForTheme(terminal.ThemeDark), activityRenderModePlain)
 	defer session.finish(nil)
 
 	slog.Warn("source bundling failed", slog.String("context", "/tmp/spec.yaml"))
@@ -422,6 +448,18 @@ func TestConfigureBuildLogger_UsesPrettyLogger(t *testing.T) {
 	assert.Contains(t, stderr.String(), "source bundling failed")
 	assert.Contains(t, stderr.String(), "context")
 	assert.Contains(t, stderr.String(), "└─")
+}
+
+func TestConfigureBuildLogger_DebugModeStreamsInfoImmediately(t *testing.T) {
+	app, _, stderr := newTestApplication(t)
+	session := app.configureBuildLogger(terminal.PaletteForTheme(terminal.ThemeDark), activityRenderModeDebug)
+	defer session.finish(nil)
+
+	slog.Info("building libopenapi document", slog.String("stage", "HTML"))
+
+	assert.Contains(t, stderr.String(), "building libopenapi document")
+	assert.Contains(t, stderr.String(), "stage")
+	assert.False(t, session.buffered)
 }
 
 func TestBuildLoggerSession_FlushesBufferedLogsOnError(t *testing.T) {
@@ -443,6 +481,36 @@ func TestBuildLoggerSession_FlushesBufferedLogsOnError(t *testing.T) {
 
 	assert.Contains(t, stderr.String(), "source bundling failed")
 	assert.Contains(t, stderr.String(), "context")
+}
+
+func TestRunWithActivity_TimesOutWhenRendererDoesNotExit(t *testing.T) {
+	pp, err := printingpress.CreatePrintingPressFromBytes([]byte(singleFileSpecYAML), nil)
+	require.NoError(t, err)
+
+	previousTimeout := activityRenderWaitTimeout
+	activityRenderWaitTimeout = 10 * time.Millisecond
+	defer func() {
+		activityRenderWaitTimeout = previousTimeout
+	}()
+
+	release := make(chan struct{})
+	renderDone := make(chan struct{})
+	start := time.Now()
+
+	result, err := runWithActivity(pp, func(sub *printingpress.ActivitySubscription) {
+		defer close(renderDone)
+		<-release
+	}, func() (int, error) {
+		return 42, nil
+	})
+
+	elapsed := time.Since(start)
+	close(release)
+	<-renderDone
+
+	require.NoError(t, err)
+	assert.Equal(t, 42, result)
+	assert.Less(t, elapsed, 80*time.Millisecond)
 }
 
 func ptr[T any](v T) *T {

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -64,4 +66,41 @@ func TestProgressModelFinalStageReachesFullPercent(t *testing.T) {
 	model = updated.(progressModel)
 
 	require.InDelta(t, 1.0, model.percent, 0.0001)
+}
+
+func TestSelectActivityRenderMode_DebugOverridesFallback(t *testing.T) {
+	mode := selectActivityRenderMode(&bytes.Buffer{}, true)
+	require.Equal(t, activityRenderModeDebug, mode)
+}
+
+func TestSelectActivityRenderMode_NonTTYFallsBackToPlain(t *testing.T) {
+	mode := selectActivityRenderMode(&bytes.Buffer{}, false)
+	require.Equal(t, activityRenderModePlain, mode)
+}
+
+func TestEnqueueLatest_ReplacesOldestWhenFull(t *testing.T) {
+	queue := make(chan progressUpdateMsg, 1)
+	require.True(t, enqueueLatest(queue, progressUpdateMsg{stage: "html", task: "first"}))
+	require.True(t, enqueueLatest(queue, progressUpdateMsg{stage: "html", task: "second"}))
+
+	msg := <-queue
+	require.Equal(t, "second", msg.task)
+}
+
+func TestDebugActivityRenderer_LogsLiveUpdates(t *testing.T) {
+	var output bytes.Buffer
+	logger := terminal.NewPrettyLogger(&terminal.PrettyHandlerOptions{
+		Level:      slog.LevelDebug,
+		TimeFormat: terminal.TimeFormatTimeOnly,
+		Writer:     &output,
+		Palette:    ptr(terminal.PaletteForTheme(terminal.ThemeDark)),
+	})
+
+	renderer := newDebugActivityRenderer(logger)
+	renderer.updateManual("json", "writing json artifacts", "running", 0.2, 0, nil)
+	renderer.updateManual("json", "json artifacts complete", "completed", 1, 125*time.Millisecond, nil)
+
+	require.Contains(t, output.String(), "writing json artifacts")
+	require.Contains(t, output.String(), "JSON complete")
+	require.Contains(t, output.String(), "percent")
 }

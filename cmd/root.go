@@ -36,6 +36,7 @@ type application struct {
 
 type buildLoggerSession struct {
 	previous *slog.Logger
+	logger   *slog.Logger
 	handler  *terminal.PrettyHandler
 	buffered bool
 }
@@ -53,7 +54,10 @@ type rootOptions struct {
 	publish   bool
 	serve     bool
 	port      int
+	debug     bool
 }
+
+var activityRenderWaitTimeout = 2 * time.Second
 
 type sourceInput struct {
 	specBytes []byte
@@ -130,6 +134,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.publish, "publish", false, "Build hosted/served HTML assets without starting a local server")
 	cmd.Flags().BoolVar(&opts.serve, "serve", false, "Serve the rendered output after building")
 	cmd.Flags().IntVar(&opts.port, "port", 9090, "Port to use with --serve")
+	cmd.Flags().BoolVar(&opts.debug, "debug", false, "Disable the progress bar and stream build logs live")
 
 	cmd.SetOut(a.stdout)
 	cmd.SetErr(a.stderr)
@@ -171,15 +176,16 @@ func (a *application) runBuild(specArg string, opts *rootOptions, palette termin
 	}
 
 	buildStart := time.Now()
-	loggerSession := a.configureBuildLogger(palette)
+	renderMode := selectActivityRenderMode(a.stderr, opts.debug)
+	loggerSession := a.configureBuildLogger(palette, renderMode)
 	defer func() {
 		loggerSession.finish(err)
 	}()
 
 	a.printBannerIfEnabled(opts, palette)
 
-	progressUI := newBuildProgressUI(a.stderr, palette, buildStageCount(opts))
-	defer progressUI.Close()
+	renderer := newActivityRenderer(renderMode, a.stderr, palette, buildStageCount(opts), loggerSession.logger)
+	defer renderer.Close()
 
 	source, err := a.loadSource(specArg, opts.basePath)
 	if err != nil {
@@ -223,14 +229,14 @@ func (a *application) runBuild(specArg string, opts *rootOptions, palette termin
 	var site *ppmodel.Site
 
 	if !opts.noHTML {
-		htmlStats, err = runWithActivity(pp, progressUI.renderActivity, pp.PrintHTML)
+		htmlStats, err = runWithActivity(pp, renderer.renderActivity, pp.PrintHTML)
 		if err != nil {
 			return &cliError{message: "html render failed", detail: err.Error()}
 		}
 	}
 
 	if !opts.noLLM {
-		llmStats, err = runWithActivity(pp, progressUI.renderActivity, pp.PrintLLM)
+		llmStats, err = runWithActivity(pp, renderer.renderActivity, pp.PrintLLM)
 		if err != nil {
 			return &cliError{message: "llm render failed", detail: err.Error()}
 		}
@@ -238,7 +244,7 @@ func (a *application) runBuild(specArg string, opts *rootOptions, palette termin
 
 	if !opts.noJSON {
 		if htmlStats == nil && llmStats == nil {
-			site, err = runWithActivity(pp, progressUI.renderActivity, pp.PressModel)
+			site, err = runWithActivity(pp, renderer.renderActivity, pp.PressModel)
 			if err != nil {
 				return &cliError{message: "model build failed", detail: err.Error()}
 			}
@@ -249,13 +255,13 @@ func (a *application) runBuild(specArg string, opts *rootOptions, palette termin
 			}
 		}
 		jsonStart := time.Now()
-		progressUI.updateManual("json", "writing json artifacts", "running", 0.2, 0, nil)
+		renderer.updateManual("json", "writing json artifacts", "running", 0.2, 0, nil)
 		if err := printingpress.PrintJSONArtifacts(site, ""); err != nil {
-			progressUI.updateManual("json", "json artifact write failed", "failed", 0, time.Since(jsonStart), err)
+			renderer.updateManual("json", "json artifact write failed", "failed", 0, time.Since(jsonStart), err)
 			return &cliError{message: "json artifact write failed", detail: err.Error()}
 		}
 		jsonDuration := time.Since(jsonStart)
-		progressUI.updateManual("json", "json artifacts complete", "completed", 1, jsonDuration, nil)
+		renderer.updateManual("json", "json artifacts complete", "completed", 1, jsonDuration, nil)
 	}
 
 	if site == nil {
@@ -270,7 +276,7 @@ func (a *application) runBuild(specArg string, opts *rootOptions, palette termin
 		return &cliError{message: "unable to scan output directory", detail: err.Error()}
 	}
 
-	progressUI.Close()
+	renderer.Close()
 	a.printSummary(palette, site, htmlStats, llmStats, time.Since(buildStart), fileCount, totalBytes)
 
 	if opts.serve {
@@ -283,19 +289,25 @@ func (a *application) runBuild(specArg string, opts *rootOptions, palette termin
 	return nil
 }
 
-func (a *application) configureBuildLogger(palette terminal.Palette) *buildLoggerSession {
-	buffered := supportsInteractiveProgress(a.stderr)
+func (a *application) configureBuildLogger(palette terminal.Palette, mode activityRenderMode) *buildLoggerSession {
+	buffered := mode == activityRenderModeProgress
+	level := slog.LevelWarn
+	if mode == activityRenderModeDebug {
+		level = slog.LevelDebug
+	}
 	handler := terminal.NewPrettyHandler(&terminal.PrettyHandlerOptions{
-		Level:      slog.LevelWarn,
+		Level:      level,
 		TimeFormat: terminal.TimeFormatTimeOnly,
 		Writer:     a.stderr,
 		Palette:    &palette,
 		Buffer:     buffered,
 	})
 	previous := slog.Default()
-	slog.SetDefault(slog.New(handler))
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
 	return &buildLoggerSession{
 		previous: previous,
+		logger:   logger,
 		handler:  handler,
 		buffered: buffered,
 	}
@@ -343,6 +355,7 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Examples:"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --debug ./openapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --publish --output ./api-docs ./openapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --serve --output ./api-docs ./openapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press https://example.com/openapi.yaml"))
@@ -482,7 +495,14 @@ func runWithActivity[T any](pp *printingpress.PrintingPress, render func(*printi
 		close(done)
 	}()
 	result, err := run()
-	<-done
+	if sub != nil {
+		sub.Close()
+	}
+	select {
+	case <-done:
+	case <-time.After(activityRenderWaitTimeout):
+		slog.Warn("activity renderer did not shut down before timeout", "timeout", roundDuration(activityRenderWaitTimeout).String())
+	}
 	return result, err
 }
 

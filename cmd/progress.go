@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -17,12 +19,33 @@ import (
 	"golang.org/x/term"
 )
 
+type activityRenderMode int
+
+const (
+	activityRenderModePlain activityRenderMode = iota
+	activityRenderModeProgress
+	activityRenderModeDebug
+)
+
+const progressCloseTimeout = 2 * time.Second
+
+type activityRenderer interface {
+	renderActivity(sub *printingpress.ActivitySubscription)
+	updateManual(stage, task, status string, percent float64, elapsed time.Duration, err error)
+	Close()
+}
+
 type buildProgressUI struct {
 	writer      io.Writer
 	interactive bool
 	program     *tea.Program
+	send        func(tea.Msg)
+	kill        func()
+	cancel      context.CancelFunc
+	updates     chan tea.Msg
 	done        chan struct{}
 	closeOnce   sync.Once
+	closeWait   time.Duration
 }
 
 type progressUpdateMsg struct {
@@ -55,10 +78,41 @@ type progressModel struct {
 	completedStages int
 }
 
+type plainActivityRenderer struct {
+	writer io.Writer
+}
+
+type debugActivityRenderer struct {
+	logger *slog.Logger
+}
+
+func selectActivityRenderMode(writer io.Writer, debug bool) activityRenderMode {
+	if debug {
+		return activityRenderModeDebug
+	}
+	if supportsInteractiveProgress(writer) {
+		return activityRenderModeProgress
+	}
+	return activityRenderModePlain
+}
+
+func newActivityRenderer(mode activityRenderMode, writer io.Writer, palette terminal.Palette, totalStages int, logger *slog.Logger) activityRenderer {
+	switch mode {
+	case activityRenderModeDebug:
+		return newDebugActivityRenderer(logger)
+	case activityRenderModeProgress:
+		return newBuildProgressUI(writer, palette, totalStages)
+	default:
+		return &plainActivityRenderer{writer: writer}
+	}
+}
+
 func newBuildProgressUI(writer io.Writer, palette terminal.Palette, totalStages int) *buildProgressUI {
 	ui := &buildProgressUI{
-		writer: writer,
-		done:   make(chan struct{}),
+		writer:    writer,
+		done:      make(chan struct{}),
+		updates:   make(chan tea.Msg, 32),
+		closeWait: progressCloseTimeout,
 	}
 	if totalStages < 1 {
 		totalStages = 1
@@ -69,8 +123,13 @@ func newBuildProgressUI(writer io.Writer, palette terminal.Palette, totalStages 
 	}
 
 	model := newProgressModel(palette, totalStages)
-	ui.program = tea.NewProgram(model, tea.WithOutput(writer), tea.WithInput(os.Stdin))
+	ctx, cancel := context.WithCancel(context.Background())
+	ui.cancel = cancel
+	ui.program = tea.NewProgram(model, tea.WithOutput(writer), tea.WithInput(nil), tea.WithContext(ctx))
+	ui.send = ui.program.Send
+	ui.kill = ui.program.Kill
 	ui.interactive = true
+	ui.startBridge()
 	go func() {
 		_, _ = ui.program.Run()
 		close(ui.done)
@@ -126,7 +185,7 @@ func supportsInteractiveProgress(writer io.Writer) bool {
 	if !term.IsTerminal(int(file.Fd())) {
 		return false
 	}
-	return term.IsTerminal(int(os.Stdin.Fd()))
+	return true
 }
 
 func (ui *buildProgressUI) renderActivity(sub *printingpress.ActivitySubscription) {
@@ -138,7 +197,7 @@ func (ui *buildProgressUI) renderActivity(sub *printingpress.ActivitySubscriptio
 		return
 	}
 	for update := range sub.Updates() {
-		ui.program.Send(progressUpdateMsg{
+		ui.enqueueMsg(progressUpdateMsg{
 			stage:   update.JobType,
 			task:    update.CurrentTask,
 			status:  update.Status,
@@ -168,16 +227,162 @@ func (ui *buildProgressUI) updateManual(stage, task, status string, percent floa
 	if err != nil {
 		msg.error = err.Error()
 	}
-	ui.program.Send(msg)
+	ui.enqueueMsg(msg)
 }
 
 func (ui *buildProgressUI) Close() {
 	ui.closeOnce.Do(func() {
 		if ui.interactive && ui.program != nil {
-			ui.program.Send(progressQuitMsg{})
+			ui.enqueueMsg(progressQuitMsg{})
+			select {
+			case <-ui.done:
+				return
+			case <-time.After(ui.closeWait):
+			}
+			if ui.cancel != nil {
+				ui.cancel()
+			}
+			select {
+			case <-ui.done:
+				return
+			case <-time.After(250 * time.Millisecond):
+			}
+			if ui.kill != nil {
+				ui.kill()
+			}
 		}
-		<-ui.done
+		select {
+		case <-ui.done:
+		case <-time.After(250 * time.Millisecond):
+		}
 	})
+}
+
+func (ui *buildProgressUI) startBridge() {
+	if ui.updates == nil || ui.send == nil {
+		return
+	}
+	go func() {
+		for {
+			select {
+			case <-ui.done:
+				return
+			case msg := <-ui.updates:
+				ui.send(msg)
+			}
+		}
+	}()
+}
+
+func (ui *buildProgressUI) enqueueMsg(msg tea.Msg) bool {
+	if !ui.interactive || ui.updates == nil {
+		return false
+	}
+	return enqueueLatest(ui.updates, msg)
+}
+
+func enqueueLatest[T any](queue chan T, value T) bool {
+	select {
+	case queue <- value:
+		return true
+	default:
+	}
+
+	select {
+	case <-queue:
+	default:
+	}
+
+	select {
+	case queue <- value:
+		return true
+	default:
+		return false
+	}
+}
+
+func (r *plainActivityRenderer) renderActivity(sub *printingpress.ActivitySubscription) {
+	if sub == nil {
+		return
+	}
+	renderActivityFallback(r.writer, sub)
+}
+
+func (r *plainActivityRenderer) updateManual(stage, task, status string, elapsedPercent float64, elapsed time.Duration, err error) {
+	if status == "completed" {
+		fmt.Fprintln(r.writer, formatStatusLine(stage, fmt.Sprintf("completed in %s", roundDuration(elapsed))))
+		return
+	}
+	fmt.Fprintln(r.writer, formatStatusLine(stage, task))
+}
+
+func (r *plainActivityRenderer) Close() {}
+
+func newDebugActivityRenderer(logger *slog.Logger) *debugActivityRenderer {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &debugActivityRenderer{logger: logger}
+}
+
+func (r *debugActivityRenderer) renderActivity(sub *printingpress.ActivitySubscription) {
+	if sub == nil {
+		return
+	}
+	for update := range sub.Updates() {
+		r.logActivity(update.JobType, update.CurrentTask, update.Status, update.CompletedTasks, update.TotalTasks, update.PercentComplete/100, update.Elapsed, update.Error)
+	}
+}
+
+func (r *debugActivityRenderer) updateManual(stage, task, status string, percent float64, elapsed time.Duration, err error) {
+	errorText := ""
+	if err != nil {
+		errorText = err.Error()
+	}
+	r.logActivity(stage, task, status, 0, 0, percent, elapsed, errorText)
+}
+
+func (r *debugActivityRenderer) Close() {}
+
+func (r *debugActivityRenderer) logActivity(stage, task, status string, completed, total int64, percent float64, elapsed time.Duration, errorText string) {
+	if r == nil || r.logger == nil {
+		return
+	}
+	stageLabel := strings.ToUpper(strings.TrimSpace(stage))
+	if stageLabel == "" {
+		stageLabel = "BUILD"
+	}
+	message := task
+	if strings.TrimSpace(message) == "" {
+		message = strings.ToLower(stageLabel)
+	}
+	attrs := []any{
+		"stage", stageLabel,
+		"status", status,
+	}
+	if total > 0 {
+		attrs = append(attrs,
+			"completed", completed,
+			"total", total,
+			"percent", fmt.Sprintf("%.0f%%", clampPercent(percent)*100),
+		)
+	} else if percent > 0 {
+		attrs = append(attrs, "percent", fmt.Sprintf("%.0f%%", clampPercent(percent)*100))
+	}
+	if elapsed > 0 {
+		attrs = append(attrs, "elapsed", roundDuration(elapsed).String())
+	}
+	if errorText != "" {
+		attrs = append(attrs, "error", errorText)
+	}
+	switch status {
+	case "completed":
+		r.logger.Log(context.Background(), terminal.LevelSuccess, stageLabel+" complete", attrs...)
+	case "failed":
+		r.logger.Warn(stageLabel+" failed", attrs...)
+	default:
+		r.logger.Info(message, attrs...)
+	}
 }
 
 func renderActivityFallback(writer io.Writer, sub *printingpress.ActivitySubscription) {

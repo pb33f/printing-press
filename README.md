@@ -43,6 +43,7 @@ Examples:
 printing-press ./openapi.yaml
 printing-press --publish --output ./api-docs ./openapi.yaml
 printing-press --serve --output ./api-docs ./openapi.yaml
+printing-press --debug ./openapi.yaml
 printing-press --theme roger ./openapi.yaml
 ```
 
@@ -72,6 +73,7 @@ You can disable any of these with the `--no-*` flags.
 - `--base-path`: Base path for resolving local file references
 - `--theme`: Terminal theme: `dark`, `roger`, or `tektronix`
 - `--no-logo`, `-b`: Disable the banner
+- `--debug`: Disable the progress bar and stream build and parser logs live
 - `--no-html`: Skip HTML output
 - `--no-llm`: Skip LLM output
 - `--no-json`: Skip JSON artifact output
@@ -79,6 +81,14 @@ You can disable any of these with the `--no-*` flags.
 - `--serve`: Serve the rendered output after building
 - `--port`: Port to use with `--serve`
 - `--help`: Show all options
+
+## Debugging builds
+
+```bash
+printing-press --debug ./openapi.yaml
+```
+
+This disables the progress bar and streams styled build, activity, and parser logs live. If you only need a plain non-interactive fallback, `TERM=dumb` still forces text-only progress output.
 
 ## Local preview
 
