@@ -344,6 +344,51 @@ func TestRootCommand_ServeForwardsBaseURL(t *testing.T) {
 	assert.Equal(t, "/docs/", servedBaseURL)
 }
 
+func TestRootCommand_AggregateServeUsesRenderedOutput(t *testing.T) {
+	repoRoot := writeAggregateRepo(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, stdout, _ := newTestApplication(t)
+
+	var servedAddr string
+	var servedDir string
+	var servedBaseURL string
+	app.serveFn = func(addr, dir, baseURL string) error {
+		servedAddr = addr
+		servedDir = dir
+		servedBaseURL = baseURL
+		_, err := os.Stat(filepath.Join(dir, "index.html"))
+		return err
+	}
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--serve", "--port", "9191", "--output", outputDir, repoRoot})
+
+	require.NoError(t, cmd.Execute())
+	assert.Equal(t, ":9191", servedAddr)
+	assert.Equal(t, outputDir, servedDir)
+	assert.Empty(t, servedBaseURL)
+	assert.FileExists(t, filepath.Join(outputDir, "index.html"))
+	assert.Contains(t, stdout.String(), "serving http://127.0.0.1:9191")
+}
+
+func TestRootCommand_AggregateServeForwardsBaseURL(t *testing.T) {
+	repoRoot := writeAggregateRepo(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, _ := newTestApplication(t)
+
+	var servedBaseURL string
+	app.serveFn = func(addr, dir, baseURL string) error {
+		servedBaseURL = baseURL
+		return nil
+	}
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--serve", "--base-url", "/docs/", "--output", outputDir, repoRoot})
+
+	require.NoError(t, cmd.Execute())
+	assert.Equal(t, "/docs/", servedBaseURL)
+}
+
 func TestRootCommand_PublishBuildsServedAssetsWithoutStartingServer(t *testing.T) {
 	specPath := writeSingleFileSpec(t, t.TempDir())
 	outputDir := filepath.Join(t.TempDir(), "site")
@@ -484,6 +529,30 @@ func TestStaticServer_MountsUnderBasePath(t *testing.T) {
 	require.NoError(t, err)
 	defer notFoundResp.Body.Close()
 	assert.Equal(t, http.StatusNotFound, notFoundResp.StatusCode)
+}
+
+func TestStaticServer_MountedBasePathUsesRevalidatingCacheForStaticAssets(t *testing.T) {
+	dir := t.TempDir()
+	staticDir := filepath.Join(dir, "static")
+	require.NoError(t, os.MkdirAll(staticDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(staticDir, "printing-press.css"), []byte("body{}"), 0o644))
+
+	server := httptest.NewServer(newStaticServer(dir, "/docs/"))
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/docs/static/printing-press.css")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"))
+}
+
+func TestCachePolicyForPath_TreatsMountedAggregateAssetsAsRevalidating(t *testing.T) {
+	assert.Equal(t, "revalidate", cachePolicyForPath("/docs/static/printing-press.css"))
+	assert.Equal(t, "revalidate", cachePolicyForPath("/docs/services/users/versions/v1/specs/users-api/static/printing-press-shared.json"))
+	assert.Equal(t, "revalidate", cachePolicyForPath("/docs/services/users/versions/v1/specs/users-api/static/page-data/operations/get-user.json"))
+	assert.Equal(t, "revalidate", cachePolicyForPath("/docs/services/users/versions/v1/specs/users-api/index.html"))
+	assert.Equal(t, "no-store", cachePolicyForPath("/docs/services/users/versions/v1/specs/users-api/llms.txt"))
 }
 
 func TestStaticServer_CompressesMarkdownAndYAML(t *testing.T) {

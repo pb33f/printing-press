@@ -756,16 +756,20 @@ func cachePolicyForPath(requestPath string) string {
 	if requestPath == "" || requestPath == "/" {
 		return "revalidate"
 	}
-	if strings.HasPrefix(requestPath, "/static/") ||
-		strings.HasPrefix(requestPath, "/static/page-data/") ||
-		strings.HasPrefix(requestPath, "/static/page-viz/") ||
-		strings.HasPrefix(requestPath, "/static/printing-press-shared.") {
+	if hasServeStaticPath(requestPath) {
 		return "revalidate"
 	}
 	if strings.EqualFold(filepath.Ext(requestPath), ".html") {
 		return "revalidate"
 	}
 	return "no-store"
+}
+
+func hasServeStaticPath(requestPath string) bool {
+	return strings.Contains(requestPath, "/static/") ||
+		strings.Contains(requestPath, "/static/page-data/") ||
+		strings.Contains(requestPath, "/static/page-viz/") ||
+		strings.Contains(requestPath, "/static/printing-press-shared.")
 }
 
 func shouldGzipResponse(r *http.Request) bool {
