@@ -83,7 +83,7 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 
 	if opts.serve {
 		fmt.Fprintf(a.stdout, "serving http://127.0.0.1:%d from %s\n", opts.port, catalog.OutputDir)
-		if err := a.serveFn(fmt.Sprintf(":%d", opts.port), catalog.OutputDir); err != nil {
+		if err := a.serveFn(fmt.Sprintf(":%d", opts.port), catalog.OutputDir, catalog.BaseURL); err != nil {
 			return &cliError{message: "unable to serve rendered output", detail: err.Error()}
 		}
 	}

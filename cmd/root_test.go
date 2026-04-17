@@ -344,6 +344,24 @@ func TestRootCommand_ServeForwardsBaseURL(t *testing.T) {
 	assert.Equal(t, "/docs/", servedBaseURL)
 }
 
+func TestRootCommand_AggregateServeForwardsBaseURL(t *testing.T) {
+	repoRoot := writeAggregateRepo(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, _ := newTestApplication(t)
+
+	var servedBaseURL string
+	app.serveFn = func(addr, dir, baseURL string) error {
+		servedBaseURL = baseURL
+		return nil
+	}
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--serve", "--base-url", "/catalog/", "--output", outputDir, repoRoot})
+
+	require.NoError(t, cmd.Execute())
+	assert.Equal(t, "/catalog/", servedBaseURL)
+}
+
 func TestRootCommand_PublishBuildsServedAssetsWithoutStartingServer(t *testing.T) {
 	specPath := writeSingleFileSpec(t, t.TempDir())
 	outputDir := filepath.Join(t.TempDir(), "site")
