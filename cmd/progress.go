@@ -27,8 +27,6 @@ const (
 	activityRenderModeDebug
 )
 
-const progressCloseTimeout = 2 * time.Second
-
 type activityRenderer interface {
 	renderActivity(sub *printingpress.ActivitySubscription)
 	updateManual(stage, task, status string, percent float64, elapsed time.Duration, err error)
@@ -38,14 +36,12 @@ type activityRenderer interface {
 type buildProgressUI struct {
 	writer      io.Writer
 	interactive bool
-	program     *tea.Program
-	send        func(tea.Msg)
-	kill        func()
-	cancel      context.CancelFunc
-	updates     chan tea.Msg
-	done        chan struct{}
+	model       progressModel
+	live        *ansiLiveRenderer
+	stop        chan struct{}
+	mu          sync.Mutex
+	closed      bool
 	closeOnce   sync.Once
-	closeWait   time.Duration
 }
 
 type progressUpdateMsg struct {
@@ -109,31 +105,20 @@ func newActivityRenderer(mode activityRenderMode, writer io.Writer, palette term
 
 func newBuildProgressUI(writer io.Writer, palette terminal.Palette, totalStages int) *buildProgressUI {
 	ui := &buildProgressUI{
-		writer:    writer,
-		done:      make(chan struct{}),
-		updates:   make(chan tea.Msg, 32),
-		closeWait: progressCloseTimeout,
+		writer: writer,
+		live:   newANSILiveRenderer(writer),
+		stop:   make(chan struct{}),
 	}
 	if totalStages < 1 {
 		totalStages = 1
 	}
 	if !supportsInteractiveProgress(writer) {
-		close(ui.done)
 		return ui
 	}
 
-	model := newProgressModel(palette, totalStages)
-	ctx, cancel := context.WithCancel(context.Background())
-	ui.cancel = cancel
-	ui.program = tea.NewProgram(model, tea.WithOutput(writer), tea.WithInput(nil), tea.WithContext(ctx))
-	ui.send = ui.program.Send
-	ui.kill = ui.program.Kill
+	ui.model = newProgressModel(palette, totalStages)
 	ui.interactive = true
-	ui.startBridge()
-	go func() {
-		_, _ = ui.program.Run()
-		close(ui.done)
-	}()
+	ui.startSpinner()
 	return ui
 }
 
@@ -142,17 +127,9 @@ func newProgressModel(palette terminal.Palette, totalStages int) progressModel {
 	s.Spinner = spinner.Dot
 	s.Style = styleWithForeground(palette.Secondary).Bold(true)
 
-	start, end := progressRamp(palette.Theme)
-	bar := progress.New(
-		progress.WithWidth(38),
-		progress.WithColors(lipgloss.Color(start), lipgloss.Color(end)),
-		progress.WithScaled(true),
-		progress.WithFillCharacters('█', '░'),
-	)
-
 	return progressModel{
 		spinner:     s,
-		bar:         bar,
+		bar:         newGradientProgressBar(palette, 38),
 		titleStyle:  styleWithForeground(palette.Primary).Bold(true),
 		taskStyle:   styleWithForeground(palette.Detail),
 		errorStyle:  styleWithForeground(palette.Breaking).Bold(true),
@@ -161,6 +138,16 @@ func newProgressModel(palette terminal.Palette, totalStages int) progressModel {
 		completed:   make(map[string]bool),
 		task:        "warming up printing press",
 	}
+}
+
+func newGradientProgressBar(palette terminal.Palette, width int) progress.Model {
+	start, end := progressRamp(palette.Theme)
+	return progress.New(
+		progress.WithWidth(width),
+		progress.WithColors(lipgloss.Color(start), lipgloss.Color(end)),
+		progress.WithScaled(true),
+		progress.WithFillCharacters('█', '░'),
+	)
 }
 
 func progressRamp(theme terminal.ThemeName) (string, string) {
@@ -197,7 +184,7 @@ func (ui *buildProgressUI) renderActivity(sub *printingpress.ActivitySubscriptio
 		return
 	}
 	for update := range sub.Updates() {
-		ui.enqueueMsg(progressUpdateMsg{
+		ui.applyMsg(progressUpdateMsg{
 			stage:   update.JobType,
 			task:    update.CurrentTask,
 			status:  update.Status,
@@ -227,58 +214,67 @@ func (ui *buildProgressUI) updateManual(stage, task, status string, percent floa
 	if err != nil {
 		msg.error = err.Error()
 	}
-	ui.enqueueMsg(msg)
+	ui.applyMsg(msg)
 }
 
 func (ui *buildProgressUI) Close() {
 	ui.closeOnce.Do(func() {
-		if ui.interactive && ui.program != nil {
-			ui.enqueueMsg(progressQuitMsg{})
-			select {
-			case <-ui.done:
-				return
-			case <-time.After(ui.closeWait):
-			}
-			if ui.cancel != nil {
-				ui.cancel()
-			}
-			select {
-			case <-ui.done:
-				return
-			case <-time.After(250 * time.Millisecond):
-			}
-			if ui.kill != nil {
-				ui.kill()
-			}
+		if !ui.interactive {
+			return
 		}
-		select {
-		case <-ui.done:
-		case <-time.After(250 * time.Millisecond):
-		}
+		ui.mu.Lock()
+		ui.closed = true
+		ui.mu.Unlock()
+		close(ui.stop)
+		ui.live.close()
 	})
 }
 
-func (ui *buildProgressUI) startBridge() {
-	if ui.updates == nil || ui.send == nil {
+func (ui *buildProgressUI) applyMsg(msg tea.Msg) {
+	if !ui.interactive {
 		return
 	}
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	if ui.closed {
+		return
+	}
+	updated, _ := ui.model.Update(msg)
+	ui.model = updated.(progressModel)
+	ui.live.render(splitViewLines(ui.model.View()))
+}
+
+func (ui *buildProgressUI) startSpinner() {
+	if !ui.interactive {
+		return
+	}
+	interval := ui.model.spinner.Spinner.FPS
+	if interval <= 0 {
+		interval = 100 * time.Millisecond
+	}
 	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
 		for {
 			select {
-			case <-ui.done:
+			case <-ui.stop:
 				return
-			case msg := <-ui.updates:
-				ui.send(msg)
+			case <-ticker.C:
+				ui.tickSpinner()
 			}
 		}
 	}()
 }
 
-func (ui *buildProgressUI) enqueueMsg(msg tea.Msg) bool {
-	if !ui.interactive || ui.updates == nil {
-		return false
+func (ui *buildProgressUI) tickSpinner() {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	if ui.closed {
+		return
 	}
-	return enqueueLatest(ui.updates, msg)
+	updated, _ := ui.model.Update(ui.model.spinner.Tick())
+	ui.model = updated.(progressModel)
+	ui.live.render(splitViewLines(ui.model.View()))
 }
 
 func enqueueLatest[T any](queue chan T, value T) bool {

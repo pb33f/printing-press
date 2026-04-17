@@ -42,19 +42,25 @@ type buildLoggerSession struct {
 }
 
 type rootOptions struct {
-	outputDir string
-	title     string
-	baseURL   string
-	basePath  string
-	theme     string
-	noLogo    bool
-	noHTML    bool
-	noLLM     bool
-	noJSON    bool
-	publish   bool
-	serve     bool
-	port      int
-	debug     bool
+	outputDir               string
+	title                   string
+	description             string
+	baseURL                 string
+	basePath                string
+	theme                   string
+	configPath              string
+	buildMode               string
+	maxPools                int
+	workersPerPool          int
+	disableSkippedRendering bool
+	noLogo                  bool
+	noHTML                  bool
+	noLLM                   bool
+	noJSON                  bool
+	publish                 bool
+	serve                   bool
+	port                    int
+	debug                   bool
 }
 
 var activityRenderWaitTimeout = 2 * time.Second
@@ -118,14 +124,19 @@ func (a *application) newRootCommand() *cobra.Command {
 		SilenceErrors: true,
 		Args:          cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.runRoot(args, opts)
+			return a.runRoot(cmd, args, opts)
 		},
 	}
 
 	cmd.Flags().StringVarP(&opts.outputDir, "output", "o", "", "Output directory for rendered docs")
 	cmd.Flags().StringVar(&opts.title, "title", "", "Override the API title")
+	cmd.Flags().StringVar(&opts.configPath, "config", "", "Path to a printing-press.yaml config file")
 	cmd.Flags().StringVar(&opts.baseURL, "base-url", "", "Base URL to use in generated HTML")
 	cmd.Flags().StringVar(&opts.basePath, "base-path", "", "Base path for resolving local file references")
+	cmd.Flags().StringVar(&opts.buildMode, "build-mode", "", "Aggregate build mode: full, fast, or watch")
+	cmd.Flags().IntVar(&opts.maxPools, "max-pools", 0, "Aggregate max concurrent render pools")
+	cmd.Flags().IntVar(&opts.workersPerPool, "workers-per-pool", 0, "Aggregate core budget per render pool")
+	cmd.Flags().BoolVar(&opts.disableSkippedRendering, "disable-skipped-rendering", false, "Hide skipped-render warnings from aggregate catalog pages")
 	cmd.Flags().StringVar(&opts.theme, "theme", string(terminal.ThemeDark), "Terminal theme: dark, roger, or tektronix")
 	cmd.Flags().BoolVarP(&opts.noLogo, "no-logo", "b", false, "Disable the pb33f banner")
 	cmd.Flags().BoolVar(&opts.noHTML, "no-html", false, "Skip HTML output")
@@ -141,7 +152,17 @@ func (a *application) newRootCommand() *cobra.Command {
 	return cmd
 }
 
-func (a *application) runRoot(args []string, opts *rootOptions) error {
+func (a *application) runRoot(cmd *cobra.Command, args []string, opts *rootOptions) error {
+	fileConfig, err := loadPrintingPressConfig(opts.configPath, firstArg(args))
+	if err != nil {
+		return &cliError{
+			message: "unable to load configuration",
+			hint:    "Use --config /path/to/printing-press.yaml or place printing-press.yaml in the current or target directory.",
+			detail:  err.Error(),
+		}
+	}
+	applyConfigToRootOptions(cmd, opts, fileConfig)
+
 	theme, err := parseTheme(opts.theme)
 	if err != nil {
 		return &cliError{
@@ -152,22 +173,36 @@ func (a *application) runRoot(args []string, opts *rootOptions) error {
 	}
 	palette := terminal.PaletteForTheme(theme)
 
-	if len(args) == 0 {
-		a.printWelcome(opts, palette)
-		return nil
-	}
 	if len(args) > 1 {
 		return &cliError{
-			message: "expected exactly one spec path or URL",
-			hint:    "Try 'printing-press ./openapi.yaml', 'printing-press --publish ./openapi.yaml', or 'printing-press --serve ./openapi.yaml'.",
+			message: "expected exactly one spec path, directory, or URL",
+			hint:    "Try 'printing-press ./openapi.yaml', 'printing-press ./apis', or 'printing-press --serve ./openapi.yaml'.",
 			detail:  fmt.Sprintf("received %d arguments", len(args)),
 		}
 	}
 
-	return a.runBuild(args[0], opts, palette)
+	inputArg, inputSet := resolveBuildInput(args, fileConfig)
+	if !inputSet {
+		a.printWelcome(opts, palette)
+		return nil
+	}
+
+	return a.runBuild(inputArg, opts, palette, fileConfig)
 }
 
-func (a *application) runBuild(specArg string, opts *rootOptions, palette terminal.Palette) (err error) {
+func (a *application) runBuild(specArg string, opts *rootOptions, palette terminal.Palette, fileConfig *printingPressConfigFile) (err error) {
+	if !isRemoteInput(specArg) {
+		absPath, absErr := filepath.Abs(specArg)
+		if absErr == nil {
+			if info, statErr := os.Stat(absPath); statErr == nil && info.IsDir() {
+				return a.runAggregateBuild(absPath, opts, palette, fileConfig)
+			}
+		}
+	}
+	return a.runSingleSpecBuild(specArg, opts, palette)
+}
+
+func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, palette terminal.Palette) (err error) {
 	if opts.noHTML && opts.noLLM && opts.noJSON {
 		return &cliError{
 			message: "all output types are disabled",
@@ -355,6 +390,7 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Examples:"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press ./apis"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --debug ./openapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --publish --output ./api-docs ./openapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --serve --output ./api-docs ./openapi.yaml"))
@@ -394,6 +430,26 @@ func paletteForArgs(args []string) terminal.Palette {
 		}
 	}
 	return terminal.PaletteForTheme(theme)
+}
+
+func firstArg(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	return args[0]
+}
+
+func resolveBuildInput(args []string, fileConfig *printingPressConfigFile) (string, bool) {
+	if len(args) > 0 {
+		return args[0], true
+	}
+	if fileConfig == nil {
+		return "", false
+	}
+	if strings.TrimSpace(fileConfig.Scan.Root) != "" {
+		return strings.TrimSpace(fileConfig.Scan.Root), true
+	}
+	return "", false
 }
 
 func normalizeOutputDir(raw string) (string, error) {

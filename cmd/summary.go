@@ -39,6 +39,21 @@ func (a *application) printSummary(palette terminal.Palette, site *ppmodel.Site,
 	fmt.Fprintln(a.stdout, renderWarningsSummary(palette, site.Warnings))
 }
 
+func (a *application) printAggregateSummary(palette terminal.Palette, catalog *ppmodel.CatalogSite, htmlStats, jsonStats, llmStats *printingpress.AggregatePressStatistics, totalDuration time.Duration, fileCount int, totalBytes int64) {
+	titleStyle := styleWithForeground(palette.Primary).Bold(true)
+
+	fmt.Fprintln(a.stdout, titleStyle.Render("render complete"))
+	fmt.Fprintln(a.stdout)
+	fmt.Fprintln(a.stdout, renderStatsSummary(palette, buildAggregateSummaryRows(catalog, htmlStats, jsonStats, llmStats, totalDuration, fileCount, totalBytes)))
+
+	if catalog == nil || len(catalog.Warnings) == 0 {
+		return
+	}
+
+	fmt.Fprintln(a.stdout)
+	fmt.Fprintln(a.stdout, renderWarningsSummary(palette, catalog.Warnings))
+}
+
 func buildSummaryRows(site *ppmodel.Site, htmlStats, llmStats *printingpress.PressStatistics, totalDuration time.Duration, fileCount int, totalBytes int64) []summaryRow {
 	contentStats := htmlStats
 	if contentStats == nil {
@@ -107,6 +122,75 @@ func renderStatsSummary(palette terminal.Palette, rows []summaryRow) string {
 		b.WriteString(valueStyle.Render(row.value))
 	}
 	return b.String()
+}
+
+func buildAggregateSummaryRows(catalog *ppmodel.CatalogSite, htmlStats, jsonStats, llmStats *printingpress.AggregatePressStatistics, totalDuration time.Duration, fileCount int, totalBytes int64) []summaryRow {
+	stats := firstAggregateStats(htmlStats, jsonStats, llmStats)
+
+	outputDir := ""
+	services := 0
+	versions := 0
+	specs := 0
+	changedSpecs := 0
+	poolsUsed := 0
+	warningCount := 0
+	errorCount := 0
+	buildMode := ""
+
+	if catalog != nil {
+		outputDir = catalog.OutputDir
+		warningCount = len(catalog.Warnings)
+		errorCount = countWarningErrors(catalog.Warnings)
+	}
+	if stats != nil {
+		services = stats.Services
+		versions = stats.Versions
+		specs = stats.Specs
+		changedSpecs = stats.ChangedSpecs
+		poolsUsed = stats.PoolsUsed
+		buildMode = stats.BuildMode
+	} else if catalog != nil {
+		services = len(catalog.Services)
+		for _, service := range catalog.Services {
+			if service == nil {
+				continue
+			}
+			versions += len(service.Versions)
+			specs += service.SpecCount
+		}
+	}
+
+	rows := []summaryRow{
+		{key: "output", value: outputDir},
+		{key: "services", value: fmt.Sprintf("%d", services)},
+		{key: "versions", value: fmt.Sprintf("%d", versions)},
+		{key: "specs", value: fmt.Sprintf("%d", specs)},
+	}
+	if changedSpecs > 0 || buildMode != "" {
+		rows = append(rows, summaryRow{key: "changed specs", value: fmt.Sprintf("%d", changedSpecs)})
+	}
+	if poolsUsed > 0 {
+		rows = append(rows, summaryRow{key: "render pools", value: fmt.Sprintf("%d", poolsUsed)})
+	}
+	if buildMode != "" {
+		rows = append(rows, summaryRow{key: "build mode", value: buildMode})
+	}
+	rows = append(rows,
+		summaryRow{key: "runtime", value: roundDuration(totalDuration).String()},
+		summaryRow{key: "disk usage", value: fmt.Sprintf("%d files, %s", fileCount, humanBytes(totalBytes))},
+		summaryRow{key: "warnings", value: fmt.Sprintf("%d", warningCount)},
+		summaryRow{key: "errors", value: fmt.Sprintf("%d", errorCount)},
+	)
+	return rows
+}
+
+func firstAggregateStats(stats ...*printingpress.AggregatePressStatistics) *printingpress.AggregatePressStatistics {
+	for _, stat := range stats {
+		if stat != nil {
+			return stat
+		}
+	}
+	return nil
 }
 
 func countClassDiagrams(site *ppmodel.Site) int {

@@ -38,6 +38,11 @@ func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	assert.Contains(t, stdout.String(), "--debug")
+	assert.Contains(t, stdout.String(), "--config")
+	assert.Contains(t, stdout.String(), "--build-mode")
+	assert.Contains(t, stdout.String(), "--max-pools")
+	assert.Contains(t, stdout.String(), "--workers-per-pool")
+	assert.Contains(t, stdout.String(), "--disable-skipped-rendering")
 	assert.Contains(t, stdout.String(), "stream build logs live")
 }
 
@@ -165,6 +170,132 @@ func TestRootCommand_RemoteSpecBuilds(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	assert.FileExists(t, filepath.Join(outputDir, "index.html"))
 	assert.FileExists(t, filepath.Join(outputDir, "bundle.json"))
+}
+
+func TestRootCommand_DirectoryBuildWritesAggregateOutputs(t *testing.T) {
+	repoRoot := writeAggregateRepo(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, stdout, _ := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--output", outputDir, repoRoot})
+
+	require.NoError(t, cmd.Execute())
+	assert.FileExists(t, filepath.Join(outputDir, "index.html"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "services", "users", "index.html"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "services", "users", "versions", "v2", "index.html"))
+	matches, err := filepath.Glob(filepath.Join(outputDir, "services", "users", "versions", "v2", "specs", "*", "index.html"))
+	require.NoError(t, err)
+	require.Len(t, matches, 1)
+	assert.FileExists(t, filepath.Join(outputDir, "llms.txt"))
+	assert.FileExists(t, filepath.Join(outputDir, "bundle.json"))
+	assert.Contains(t, stdout.String(), "services")
+	assert.Contains(t, stdout.String(), "specs")
+}
+
+func TestRootCommand_DirectoryBuildDefaultsOutputToWorkingDirectory(t *testing.T) {
+	repoRoot := writeAggregateRepo(t, t.TempDir())
+	workDir := t.TempDir()
+	t.Chdir(workDir)
+
+	app, stdout, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", repoRoot})
+
+	require.NoError(t, cmd.Execute())
+
+	outputDir := filepath.Join(workDir, "api-docs")
+	assert.FileExists(t, filepath.Join(outputDir, "index.html"))
+	matches, err := filepath.Glob(filepath.Join(outputDir, "services", "users", "versions", "v2", "specs", "*", "index.html"))
+	require.NoError(t, err)
+	require.Len(t, matches, 1)
+	assert.Contains(t, stdout.String(), outputDir)
+}
+
+func TestRootCommand_LoadsAggregateConfigFromTargetDirectory(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeAggregateSpecFile(t, repoRoot, "services/users/src/specs/usersv1.yaml", "Users API", "v1")
+	writeAggregateSpecFile(t, repoRoot, "services/ignored/specs/ignored.yaml", "Ignore Me", "v1")
+	configPath := filepath.Join(repoRoot, "printing-press.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(`
+title: Repo Catalog
+output: ./site-output
+scan:
+  ignoreRules:
+    - services/ignored/**
+grouping:
+  displayNameOverrides:
+    - pattern: services/users/**
+      value: Customer API
+`), 0o644))
+
+	app, _, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", repoRoot})
+
+	require.NoError(t, cmd.Execute())
+
+	outputDir := filepath.Join(repoRoot, "site-output")
+	assert.FileExists(t, filepath.Join(outputDir, "index.html"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "services", "ignored"))
+
+	indexBytes, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	require.NoError(t, err)
+	assert.Contains(t, string(indexBytes), "Repo Catalog")
+	assert.Contains(t, string(indexBytes), "Customer API")
+	assert.NotContains(t, string(indexBytes), "Ignore Me")
+}
+
+func TestBuildAggregateConfig_PropagatesDisableSkippedRendering(t *testing.T) {
+	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, &rootOptions{
+		disableSkippedRendering: true,
+	}, nil)
+
+	assert.True(t, cfg.DisableSkippedRendering)
+}
+
+func TestBuildAggregateConfig_LoadsDisableSkippedRenderingFromConfig(t *testing.T) {
+	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, &rootOptions{}, &printingPressConfigFile{
+		Build: printingPressBuildConfig{
+			DisableSkippedRendering: true,
+		},
+	})
+
+	assert.True(t, cfg.DisableSkippedRendering)
+}
+
+func TestRootCommand_NoArgsUsesConfigScanRoot(t *testing.T) {
+	projectRoot := t.TempDir()
+	scanRoot := filepath.Join(projectRoot, "apis")
+	writeAggregateRepo(t, scanRoot)
+	require.NoError(t, os.WriteFile(filepath.Join(projectRoot, "printing-press.yaml"), []byte(`
+title: Workspace Catalog
+scan:
+  root: ./apis
+output: ./site
+`), 0o644))
+
+	t.Chdir(projectRoot)
+
+	app, _, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo"})
+
+	require.NoError(t, cmd.Execute())
+	assert.FileExists(t, filepath.Join(projectRoot, "site", "index.html"))
+}
+
+func TestRootCommand_AggregateDebugLogsPools(t *testing.T) {
+	repoRoot := writeAggregateRepo(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, stderr := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--debug", "--output", outputDir, repoRoot})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stderr.String(), "aggregate pool")
+	assert.Contains(t, stderr.String(), "completed_specs")
 }
 
 func TestRootCommand_ServeUsesRenderedOutput(t *testing.T) {
@@ -355,6 +486,41 @@ func writeSplitSpec(t *testing.T, dir string) string {
 	return main
 }
 
+func writeAggregateRepo(t *testing.T, root string) string {
+	t.Helper()
+	writeAggregateSpecFile(t, root, "services/users/src/specs/usersv1.yaml", "Users API", "v1")
+	writeAggregateSpecFile(t, root, "services/users/src/specs/usersv2.yaml", "Users API", "v2")
+	writeAggregateSpecFile(t, root, "services/auditing/src/specs/auditing.yaml", "Auditing API", "1.0.0")
+	return root
+}
+
+func writeAggregateSpecFile(t *testing.T, root, relPath, title, version string) string {
+	t.Helper()
+	absPath := filepath.Join(root, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
+	spec := fmt.Sprintf(`openapi: 3.1.0
+info:
+  title: %s
+  version: %s
+paths:
+  /health:
+    get:
+      operationId: listHealth
+      responses:
+        '200':
+          description: ok
+components:
+  schemas:
+    Status:
+      type: object
+      properties:
+        ok:
+          type: boolean
+`, title, version)
+	require.NoError(t, os.WriteFile(absPath, []byte(spec), 0o644))
+	return absPath
+}
+
 const singleFileSpecYAML = `openapi: 3.1.0
 info:
   title: Burger API
@@ -421,7 +587,7 @@ func TestRootCommand_TooManyArgsFails(t *testing.T) {
 
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "expected exactly one spec path or URL")
+	assert.Contains(t, err.Error(), "expected exactly one spec path, directory, or URL")
 }
 
 func TestRenderCommandError_UsesStyledPrefixAndHint(t *testing.T) {
