@@ -25,19 +25,71 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const commitSha = context.sha;
-            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner,
-              repo,
-              commit_sha: commitSha,
-            });
+            const baseBranch = context.ref.replace('refs/heads/', '');
+            const attempts = 12;
+            const retryDelayMs = 10000;
 
-            const pr = prs.find((item) => item.merged_at) || prs[0];
-            if (!pr) {
-              core.notice(`No pull request associated with commit ${commitSha}; skipping tag creation.`);
-              core.setOutput('skip', 'true');
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            async function findMergedPR() {
+              const associated = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {
+                  owner,
+                  repo,
+                  commit_sha: commitSha,
+                  per_page: 100,
+                },
+                (response) => response.data,
+              );
+
+              let pr = associated.find((item) => item.merged_at) || associated[0];
+              if (pr) {
+                return { pr, source: 'commit-association' };
+              }
+
+              const recentClosed = await github.paginate(
+                github.rest.pulls.list,
+                {
+                  owner,
+                  repo,
+                  state: 'closed',
+                  base: baseBranch,
+                  sort: 'updated',
+                  direction: 'desc',
+                  per_page: 100,
+                },
+                (response) => response.data,
+              );
+
+              pr = recentClosed.find((item) => item.merged_at && item.merge_commit_sha === commitSha);
+              if (pr) {
+                return { pr, source: 'recent-closed-prs' };
+              }
+
+              return null;
+            }
+
+            let match = null;
+            for (let attempt = 1; attempt <= attempts; attempt += 1) {
+              match = await findMergedPR();
+              if (match) {
+                core.notice(`Resolved PR #${match.pr.number} via ${match.source} on attempt ${attempt}/${attempts}.`);
+                break;
+              }
+
+              if (attempt < attempts) {
+                core.notice(`No merged PR found for commit ${commitSha} on attempt ${attempt}/${attempts}; retrying in ${retryDelayMs / 1000}s.`);
+                await sleep(retryDelayMs);
+              }
+            }
+
+            if (!match) {
+              core.setFailed(`Unable to resolve a merged PR for commit ${commitSha} after ${attempts} attempts.`);
               return;
             }
 
+            const pr = match.pr;
             const labels = (pr.labels || []).map((label) => label.name);
             let level = '';
             if (labels.includes('release/major')) {
@@ -53,13 +105,11 @@ jobs:
               return;
             }
 
-            core.setOutput('skip', 'false');
             core.setOutput('level', level);
             core.setOutput('number', String(pr.number));
             core.setOutput('title', pr.title);
 
       - name: Compute next semantic version
-        if: steps.pr.outputs.skip != 'true'
         id: semver
         shell: bash
         run: |
@@ -94,7 +144,6 @@ jobs:
           echo "tag=${next}" >> "${GITHUB_OUTPUT}"
 
       - name: Create and push tag
-        if: steps.pr.outputs.skip != 'true'
         shell: bash
         run: |
           tag="${{ steps.semver.outputs.tag }}"
