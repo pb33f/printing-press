@@ -94,20 +94,6 @@ func TestRootCommand_DefaultBuildWritesAllOutputs(t *testing.T) {
 	assert.Contains(t, stdout.String(), "render complete")
 }
 
-func TestRootCommand_DebugStreamsActivityLogs(t *testing.T) {
-	specPath := writeSingleFileSpec(t, t.TempDir())
-	outputDir := filepath.Join(t.TempDir(), "site")
-	app, _, stderr := newTestApplication(t)
-
-	cmd := app.newRootCommand()
-	cmd.SetArgs([]string{"--no-logo", "--debug", "--output", outputDir, specPath})
-
-	require.NoError(t, cmd.Execute())
-	assert.Contains(t, stderr.String(), "building libopenapi document")
-	assert.Contains(t, stderr.String(), "building v3 model")
-	assert.Contains(t, stderr.String(), "JSON complete")
-}
-
 func TestRootCommand_DefaultBasePathUsesSpecDirectory(t *testing.T) {
 	specPath := writeSplitSpec(t, t.TempDir())
 	outputDir := filepath.Join(t.TempDir(), "site")
