@@ -23,7 +23,7 @@ Build this repo directly with Go:
 
 ```bash
 go build ./...
-go run printing-press.go ./openapi.yaml
+go run pp.go ./openapi.yaml
 ```
 
 There is no wrapper-owned UI rebuild or template-generation step here. Those are the responsibility of `pb33f/doctor`, not this CLI repo.
@@ -41,7 +41,7 @@ There is no wrapper-owned UI rebuild or template-generation step here. Those are
 For GitHub Pages, S3, Netlify, Cloudflare Pages, or similar static hosting, use:
 
 ```bash
-go run printing-press.go --publish --output ./api-docs ./openapi.yaml
+go run pp.go --publish --output ./api-docs ./openapi.yaml
 ```
 
 ## Generated Output

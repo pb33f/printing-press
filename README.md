@@ -14,18 +14,49 @@
 - emit HTML, JSON, and LLM-oriented artifacts
 - build portable offline docs or hosted docs for static serving
 
+## Install
+
+Install the latest tagged release binary with the shell installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pb33f/printing-press/main/scripts/install_printing_press.sh | sh
+```
+
+That installs the `pp` executable.
+
+If you prefer `go install`, Go will still name the binary `printing-press` because it derives command names from the module path:
+
+```bash
+go install github.com/pb33f/printing-press@latest
+```
+
+For CI environments, set `GITHUB_TOKEN` to avoid GitHub API rate limiting:
+
+```bash
+GITHUB_TOKEN="${GITHUB_TOKEN}" curl -fsSL https://raw.githubusercontent.com/pb33f/printing-press/main/scripts/install_printing_press.sh | sh
+```
+
+Verify the installed release binary:
+
+```bash
+pp version
+pp version --verbose
+```
+
+If you installed via `go install`, use `printing-press version` instead.
+
 ## Quick start
 
 Run a single spec:
 
 ```bash
-go run printing-press.go ./openapi.yaml
+go run pp.go ./openapi.yaml
 ```
 
 Scan a repo tree and build an API catalog:
 
 ```bash
-go run printing-press.go ./services
+go run pp.go ./services
 ```
 
 By default the output is written to `./api-docs` in your current working directory.
@@ -33,29 +64,29 @@ By default the output is written to `./api-docs` in your current working directo
 ## Build from source
 
 ```bash
-go build ./...
-./printing-press ./openapi.yaml
+go build -o pp .
+./pp ./openapi.yaml
 ```
 
 ## Usage
 
 ```bash
-printing-press [flags] <spec-path-or-url>
-printing-press [flags] <directory>
+pp [flags] <spec-path-or-url>
+pp [flags] <directory>
 ```
 
 Examples:
 
 ```bash
-printing-press ./openapi.yaml
-printing-press --publish --output ./api-docs ./openapi.yaml
-printing-press --serve --output ./api-docs ./openapi.yaml
-printing-press --debug ./openapi.yaml
-printing-press --theme roger ./openapi.yaml
-printing-press ./services
-printing-press --serve ./services
-printing-press --build-mode fast ./services
-printing-press --disable-skipped-rendering ./services
+pp ./openapi.yaml
+pp --publish --output ./api-docs ./openapi.yaml
+pp --serve --output ./api-docs ./openapi.yaml
+pp --debug ./openapi.yaml
+pp --theme roger ./openapi.yaml
+pp ./services
+pp --serve ./services
+pp --build-mode fast ./services
+pp --disable-skipped-rendering ./services
 ```
 
 ## Single spec vs API catalog
@@ -67,7 +98,7 @@ If the input is a file or URL, `printing-press` renders one documentation site.
 Example:
 
 ```bash
-printing-press ./openapi.yaml
+pp ./openapi.yaml
 ```
 
 Typical outputs:
@@ -96,7 +127,7 @@ services/
 Run:
 
 ```bash
-printing-press ./services
+pp ./services
 ```
 
 That produces:
@@ -174,7 +205,7 @@ The CLI will look for it:
 You can also pass it explicitly:
 
 ```bash
-printing-press --config ./printing-press.yaml ./services
+pp --config ./printing-press.yaml ./services
 ```
 
 Example:
@@ -237,13 +268,13 @@ state:
 Preview a single spec:
 
 ```bash
-printing-press --serve --output ./api-docs ./openapi.yaml
+pp --serve --output ./api-docs ./openapi.yaml
 ```
 
 Preview an API catalog:
 
 ```bash
-printing-press --serve --output ./api-docs ./services
+pp --serve --output ./api-docs ./services
 ```
 
 This starts a local preview server at `http://127.0.0.1:9090` by default.
@@ -253,13 +284,13 @@ This starts a local preview server at `http://127.0.0.1:9090` by default.
 Single spec:
 
 ```bash
-printing-press --publish --output ./api-docs ./openapi.yaml
+pp --publish --output ./api-docs ./openapi.yaml
 ```
 
 API catalog:
 
 ```bash
-printing-press --publish --output ./api-docs ./services
+pp --publish --output ./api-docs ./services
 ```
 
 This produces the hosted asset layout without starting a local server.
@@ -267,8 +298,8 @@ This produces the hosted asset layout without starting a local server.
 ## Debugging builds
 
 ```bash
-printing-press --debug ./openapi.yaml
-printing-press --debug ./services
+pp --debug ./openapi.yaml
+pp --debug ./services
 ```
 
 This disables interactive progress bars and streams styled build, activity, and parser logs live.

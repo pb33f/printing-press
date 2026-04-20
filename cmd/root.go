@@ -21,9 +21,11 @@ import (
 )
 
 type BuildInfo struct {
-	Version string
-	Commit  string
-	Date    string
+	Version   string
+	Commit    string
+	Date      string
+	GoVersion string
+	Modified  bool
 }
 
 type application struct {
@@ -88,11 +90,7 @@ func (e *cliError) Error() string {
 }
 
 func Execute(version, commit, date string) {
-	app := newApplication(BuildInfo{
-		Version: version,
-		Commit:  commit,
-		Date:    date,
-	})
+	app := newApplication(resolveBuildInfo(version, commit, date))
 	if err := app.newRootCommand().Execute(); err != nil {
 		app.renderCommandError(err, paletteForArgs(os.Args[1:]))
 		os.Exit(1)
@@ -118,7 +116,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:           "printing-press",
+		Use:           "pp",
 		Short:         "Print world class, fast, modern and LLM ready OpenAPI docs with the pb33f printing press",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -128,6 +126,7 @@ func (a *application) newRootCommand() *cobra.Command {
 		},
 	}
 
+	cmd.AddCommand(a.newVersionCommand())
 	cmd.Flags().StringVarP(&opts.outputDir, "output", "o", "", "Output directory for rendered docs")
 	cmd.Flags().StringVar(&opts.title, "title", "", "Override the API title")
 	cmd.Flags().StringVar(&opts.configPath, "config", "", "Path to a printing-press.yaml config file")
@@ -149,6 +148,37 @@ func (a *application) newRootCommand() *cobra.Command {
 
 	cmd.SetOut(a.stdout)
 	cmd.SetErr(a.stderr)
+	return cmd
+}
+
+func (a *application) newVersionCommand() *cobra.Command {
+	var verbose bool
+
+	cmd := &cobra.Command{
+		Use:     "version",
+		Short:   "Print the current version of printing-press",
+		Example: "pp version",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !verbose {
+				fmt.Fprintln(a.stdout, a.info.Version)
+				return nil
+			}
+
+			fmt.Fprintf(a.stdout, "version: %s\n", a.info.Version)
+			fmt.Fprintf(a.stdout, "commit: %s\n", a.info.Commit)
+			fmt.Fprintf(a.stdout, "date: %s\n", a.info.Date)
+			if a.info.GoVersion != "" {
+				fmt.Fprintf(a.stdout, "go: %s\n", a.info.GoVersion)
+			}
+			if a.info.Modified {
+				fmt.Fprintln(a.stdout, "modified: true")
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "Print extended build information")
 	return cmd
 }
 
@@ -176,7 +206,7 @@ func (a *application) runRoot(cmd *cobra.Command, args []string, opts *rootOptio
 	if len(args) > 1 {
 		return &cliError{
 			message: "expected exactly one spec path, directory, or URL",
-			hint:    "Try 'printing-press ./openapi.yaml', 'printing-press ./apis', or 'printing-press --serve ./openapi.yaml'.",
+			hint:    "Try 'pp ./openapi.yaml', 'pp ./apis', or 'pp --serve ./openapi.yaml'.",
 			detail:  fmt.Sprintf("received %d arguments", len(args)),
 		}
 	}
@@ -381,7 +411,7 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	accent := styleWithForeground(palette.Secondary).Bold(true)
 	muted := styleWithForeground(palette.Muted)
 
-	fmt.Fprintln(a.stdout, title.Render(">> Welcome! To render docs, try 'printing-press ./openapi.yaml'"))
+	fmt.Fprintln(a.stdout, title.Render(">> Welcome! To render docs, try 'pp ./openapi.yaml'"))
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Default outputs:"))
 	fmt.Fprintln(a.stdout, "  > html site")
@@ -389,14 +419,14 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	fmt.Fprintln(a.stdout, "  > json bundle + artifacts")
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Examples:"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press ./openapi.yaml"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press ./apis"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --debug ./openapi.yaml"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --publish --output ./api-docs ./openapi.yaml"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press --serve --output ./api-docs ./openapi.yaml"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("printing-press https://example.com/openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("pp ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("pp ./apis"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("pp --debug ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("pp --publish --output ./api-docs ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("pp --serve --output ./api-docs ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render("pp https://example.com/openapi.yaml"))
 	fmt.Fprintln(a.stdout)
-	fmt.Fprintln(a.stdout, title.Render("To see all the options, try 'printing-press --help'"))
+	fmt.Fprintln(a.stdout, title.Render("To see all the options, try 'pp --help'"))
 	fmt.Fprintln(a.stdout)
 }
 

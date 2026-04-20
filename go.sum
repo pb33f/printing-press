@@ -87,6 +87,8 @@ github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdh
 github.com/ncruces/go-strftime v0.1.9/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/pb33f/doctor v0.0.56 h1:kszZJmZrlr235tBjhJdIEpwdUNJZLnLwXrD91fpwzJk=
 github.com/pb33f/doctor v0.0.56/go.mod h1:kN+wcMNwBN8RoQbzfi7xYnRkuqHREYj7ir/2wbN5ECY=
+github.com/pb33f/doctor v0.0.57 h1:+Tv4RvBQlBz/ff/8CrMkqRxQ0v0GLV+EEBfiq22XMnI=
+github.com/pb33f/doctor v0.0.57/go.mod h1:kN+wcMNwBN8RoQbzfi7xYnRkuqHREYj7ir/2wbN5ECY=
 github.com/pb33f/jsonpath v0.8.2 h1:Ou4C7zjYClBm97dfZjDCjdZGusJoynv/vrtiEKNfj2Y=
 github.com/pb33f/jsonpath v0.8.2/go.mod h1:zBV5LJW4OQOPatmQE2QdKpGQJvhDTlE5IEj6ASaRNTo=
 github.com/pb33f/libopenapi v0.36.1 h1:CNZ52e+/W9fA1kAgL8EePDQQrKPfN9+HdLR6XAxUEpw=

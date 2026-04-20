@@ -31,5 +31,8 @@ jobs:
       - name: Test
         run: go test ./...
 
+      - name: Validate installer script
+        run: sh -n scripts/install_printing_press.sh
+
       - name: Build
         run: go build ./...

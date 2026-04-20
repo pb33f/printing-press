@@ -28,7 +28,7 @@ func TestRootCommand_NoArgsShowsWelcome(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	assert.Contains(t, stdout.String(), "https://pb33f.io/printing-press/")
 	assert.Contains(t, stdout.String(), "Welcome! To render docs")
-	assert.Contains(t, stdout.String(), "printing-press ./openapi.yaml")
+	assert.Contains(t, stdout.String(), "pp ./openapi.yaml")
 }
 
 func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {
@@ -44,6 +44,35 @@ func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {
 	assert.Contains(t, stdout.String(), "--workers-per-pool")
 	assert.Contains(t, stdout.String(), "--disable-skipped-rendering")
 	assert.Contains(t, stdout.String(), "stream build logs live")
+}
+
+func TestRootCommand_VersionCommandPrintsVersion(t *testing.T) {
+	app, stdout, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"version"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Equal(t, "test\n", stdout.String())
+}
+
+func TestRootCommand_VersionCommandVerbosePrintsBuildMetadata(t *testing.T) {
+	app, stdout, _ := newTestApplication(t)
+	app.info = BuildInfo{
+		Version:   "v0.0.1",
+		Commit:    "abc1234",
+		Date:      "Tue, 08 Apr 2026 12:00:00 EDT",
+		GoVersion: "go1.26.0",
+		Modified:  true,
+	}
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"version", "--verbose"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stdout.String(), "version: v0.0.1")
+	assert.Contains(t, stdout.String(), "commit: abc1234")
+	assert.Contains(t, stdout.String(), "date: Tue, 08 Apr 2026 12:00:00 EDT")
+	assert.Contains(t, stdout.String(), "go: go1.26.0")
+	assert.Contains(t, stdout.String(), "modified: true")
 }
 
 func TestRootCommand_DefaultBuildWritesAllOutputs(t *testing.T) {

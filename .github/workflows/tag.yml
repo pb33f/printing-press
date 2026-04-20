@@ -1,0 +1,109 @@
+name: Tag Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release bump from merged PR
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const commitSha = context.sha;
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner,
+              repo,
+              commit_sha: commitSha,
+            });
+
+            const pr = prs.find((item) => item.merged_at) || prs[0];
+            if (!pr) {
+              core.notice(`No pull request associated with commit ${commitSha}; skipping tag creation.`);
+              core.setOutput('skip', 'true');
+              return;
+            }
+
+            const labels = (pr.labels || []).map((label) => label.name);
+            let level = '';
+            if (labels.includes('release/major')) {
+              level = 'major';
+            } else if (labels.includes('release/minor')) {
+              level = 'minor';
+            } else if (labels.includes('release/patch')) {
+              level = 'patch';
+            }
+
+            if (!level) {
+              core.setFailed(`PR #${pr.number} is missing a release label.`);
+              return;
+            }
+
+            core.setOutput('skip', 'false');
+            core.setOutput('level', level);
+            core.setOutput('number', String(pr.number));
+            core.setOutput('title', pr.title);
+
+      - name: Compute next semantic version
+        if: steps.pr.outputs.skip != 'true'
+        id: semver
+        shell: bash
+        run: |
+          latest="$(git tag -l 'v*' --sort=-version:refname | head -n 1)"
+          if [ -z "${latest}" ]; then
+            latest="v0.0.0"
+          fi
+
+          version="${latest#v}"
+          IFS='.' read -r major minor patch <<<"${version}"
+
+          case "${{ steps.pr.outputs.level }}" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+            *)
+              echo "Unknown release level: ${{ steps.pr.outputs.level }}" >&2
+              exit 1
+              ;;
+          esac
+
+          next="v${major}.${minor}.${patch}"
+          echo "tag=${next}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create and push tag
+        if: steps.pr.outputs.skip != 'true'
+        shell: bash
+        run: |
+          tag="${{ steps.semver.outputs.tag }}"
+          if git rev-parse "${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists, nothing to do."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github@pb33f.io"
+          git tag -a "${tag}" -m "${tag}: PR #${{ steps.pr.outputs.number }} ${{ steps.pr.outputs.title }}"
+          git push origin "${tag}"
