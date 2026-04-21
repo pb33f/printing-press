@@ -1,0 +1,40 @@
+{
+  "name": "@pb33f/printing-press",
+  "version": "0.0.0",
+  "description": "Installable npm wrapper for the pb33f printing-press CLI",
+  "type": "module",
+  "author": "pb33f",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/pb33f/printing-press#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pb33f/printing-press.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pb33f/printing-press/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "postinstall": "node ./npm-install/postinstall.js",
+    "pack:check": "npm pack --dry-run"
+  },
+  "bin": {
+    "pp": "bin/pp.js"
+  },
+  "files": [
+    "README.md",
+    "bin/pp.js",
+    "npm-install/config.js",
+    "npm-install/postinstall.js"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "tar": "^7.5.2"
+  }
+}

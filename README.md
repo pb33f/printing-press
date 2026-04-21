@@ -24,6 +24,14 @@ curl -fsSL https://raw.githubusercontent.com/pb33f/printing-press/main/scripts/i
 
 That installs the `pp` executable.
 
+Install the npm wrapper package:
+
+```bash
+npm i -g @pb33f/printing-press
+```
+
+That also installs the `pp` executable by downloading the matching release binary for your platform.
+
 If you prefer `go install`, Go will still name the binary `printing-press` because it derives command names from the module path:
 
 ```bash

@@ -1,4 +1,6 @@
 api-docs/
 dist/
+node_modules/
+npm-install/bin/
 pp
 printing-press
