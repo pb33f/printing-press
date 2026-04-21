@@ -1,6 +1,6 @@
 export const CONFIG = {
   archiveName: "printing-press",
-  binaryName: "pp",
+  binaryName: "ppress",
   installDir: "./npm-install/bin",
   issueUrl: "https://github.com/pb33f/printing-press",
   repo: "pb33f/printing-press",

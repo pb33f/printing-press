@@ -2,7 +2,7 @@
 set -eu
 
 REPO_NAME="${REPO_NAME:-pb33f/printing-press}"
-BINARY_NAME="${BINARY_NAME:-pp}"
+BINARY_NAME="${BINARY_NAME:-ppress}"
 ARCHIVE_NAME="${ARCHIVE_NAME:-printing-press}"
 ISSUE_URL="${ISSUE_URL:-https://github.com/pb33f/printing-press/issues/new}"
 

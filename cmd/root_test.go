@@ -28,7 +28,7 @@ func TestRootCommand_NoArgsShowsWelcome(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	assert.Contains(t, stdout.String(), "https://pb33f.io/printing-press/")
 	assert.Contains(t, stdout.String(), "Welcome! To render docs")
-	assert.Contains(t, stdout.String(), "pp ./openapi.yaml")
+	assert.Contains(t, stdout.String(), commandName+" ./openapi.yaml")
 }
 
 func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {

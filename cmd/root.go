@@ -73,6 +73,8 @@ type sourceInput struct {
 	specPath  string
 }
 
+const commandName = "ppress"
+
 type cliError struct {
 	message string
 	hint    string
@@ -116,7 +118,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:           "pp",
+		Use:           commandName,
 		Short:         "Print world class, fast, modern and LLM ready OpenAPI docs with the pb33f printing press",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -157,7 +159,7 @@ func (a *application) newVersionCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "version",
 		Short:   "Print the current version of printing-press",
-		Example: "pp version",
+		Example: commandName + " version",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !verbose {
@@ -206,7 +208,7 @@ func (a *application) runRoot(cmd *cobra.Command, args []string, opts *rootOptio
 	if len(args) > 1 {
 		return &cliError{
 			message: "expected exactly one spec path, directory, or URL",
-			hint:    "Try 'pp ./openapi.yaml', 'pp ./apis', or 'pp --serve ./openapi.yaml'.",
+			hint:    fmt.Sprintf("Try '%s ./openapi.yaml', '%s ./apis', or '%s --serve ./openapi.yaml'.", commandName, commandName, commandName),
 			detail:  fmt.Sprintf("received %d arguments", len(args)),
 		}
 	}
@@ -411,7 +413,7 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	accent := styleWithForeground(palette.Secondary).Bold(true)
 	muted := styleWithForeground(palette.Muted)
 
-	fmt.Fprintln(a.stdout, title.Render(">> Welcome! To render docs, try 'pp ./openapi.yaml'"))
+	fmt.Fprintln(a.stdout, title.Render(fmt.Sprintf(">> Welcome! To render docs, try '%s ./openapi.yaml'", commandName)))
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Default outputs:"))
 	fmt.Fprintln(a.stdout, "  > html site")
@@ -419,14 +421,14 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	fmt.Fprintln(a.stdout, "  > json bundle + artifacts")
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Examples:"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("pp ./openapi.yaml"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("pp ./apis"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("pp --debug ./openapi.yaml"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("pp --publish --output ./api-docs ./openapi.yaml"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("pp --serve --output ./api-docs ./openapi.yaml"))
-	fmt.Fprintln(a.stdout, "  "+accent.Render("pp https://example.com/openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" ./apis"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" --debug ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" --publish --output ./api-docs ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" --serve --output ./api-docs ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" https://example.com/openapi.yaml"))
 	fmt.Fprintln(a.stdout)
-	fmt.Fprintln(a.stdout, title.Render("To see all the options, try 'pp --help'"))
+	fmt.Fprintln(a.stdout, title.Render(fmt.Sprintf("To see all the options, try '%s --help'", commandName)))
 	fmt.Fprintln(a.stdout)
 }
 
