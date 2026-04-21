@@ -98,7 +98,6 @@ detect_os() {
 detect_arch() {
   case "$(uname -m)" in
     x86_64|amd64) printf 'x86_64\n' ;;
-    i386|i686) printf 'i386\n' ;;
     arm64|aarch64) printf 'arm64\n' ;;
     *)
       die "$(uname -m) is not supported by this installer. Please open an issue: ${ISSUE_URL}"
