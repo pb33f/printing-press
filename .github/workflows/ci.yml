@@ -94,3 +94,24 @@ jobs:
             --output /work/out /work/openapi.yaml
 
           test -f "${tempdir}/out/index.html"
+
+  npm-package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate npm package contents
+        run: npm pack --dry-run
