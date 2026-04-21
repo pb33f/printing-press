@@ -6,7 +6,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 jobs:
@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Resolve release bump from merged PR
         id: pr
@@ -143,7 +144,20 @@ jobs:
           next="v${major}.${minor}.${patch}"
           echo "tag=${next}" >> "${GITHUB_OUTPUT}"
 
+      - name: Verify release token
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        shell: bash
+        run: |
+          if [ -z "${GH_PAT}" ]; then
+            echo "GH_PAT is required to push release tags from this workflow." >&2
+            echo "Provide a fine-grained personal access token scoped to pb33f/printing-press with Contents: Read and write via the GH_PAT Actions secret." >&2
+            exit 1
+          fi
+
       - name: Create and push tag
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         shell: bash
         run: |
           tag="${{ steps.semver.outputs.tag }}"
@@ -155,4 +169,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github@pb33f.io"
           git tag -a "${tag}" -m "${tag}: PR #${{ steps.pr.outputs.number }} ${{ steps.pr.outputs.title }}"
-          git push origin "${tag}"
+          git push "https://${GITHUB_ACTOR}:${GH_PAT}@github.com/${GITHUB_REPOSITORY}.git" "${tag}"
