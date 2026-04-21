@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
-const binaryName = process.platform === "win32" ? "pp.exe" : "pp";
+const binaryName = process.platform === "win32" ? "ppress.exe" : "ppress";
 const binaryPath = join(rootDir, "npm-install", "bin", binaryName);
 
 if (!existsSync(binaryPath)) {

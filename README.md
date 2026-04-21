@@ -24,7 +24,7 @@ Install the latest tagged release binary with the shell installer:
 curl -fsSL https://raw.githubusercontent.com/pb33f/printing-press/main/scripts/install_printing_press.sh | sh
 ```
 
-That installs the `pp` executable.
+That installs the `ppress` executable.
 
 Install the npm wrapper package:
 
@@ -38,7 +38,7 @@ Install with Homebrew:
 brew install pb33f/taps/printing-press
 ```
 
-Both the npm package and the Homebrew cask install the `pp` executable.
+Both the npm package and the Homebrew cask install the `ppress` executable.
 
 If you prefer `go install`, Go will still name the binary `printing-press` because it derives command names from the module path:
 
@@ -55,8 +55,8 @@ GITHUB_TOKEN="${GITHUB_TOKEN}" curl -fsSL https://raw.githubusercontent.com/pb33
 Verify the installed release binary:
 
 ```bash
-pp version
-pp version --verbose
+ppress version
+ppress version --verbose
 ```
 
 If you installed via `go install`, use `printing-press version` instead.
@@ -70,7 +70,7 @@ docker run --rm ghcr.io/pb33f/printing-press:latest version
 ```
 
 To work with local specs and generated docs, bind mount host directories into the container. 
-The image already uses `pp` as its entrypoint and `/work` as its default working directory, so mounted files behave like local CLI inputs.
+The image already uses `ppress` as its entrypoint and `/work` as its default working directory, so mounted files behave like local CLI inputs.
 
 Render docs from your current directory:
 
@@ -114,7 +114,7 @@ docker run --rm \
 
 Then open `http://127.0.0.1:9090`.
 
-If you want a different host port, change the left side of `-p`. For example, `-p 8080:9090` still runs `pp` on port `9090` inside the container, but you would visit `http://127.0.0.1:8080` on the host.
+If you want a different host port, change the left side of `-p`. For example, `-p 8080:9090` still runs `ppress` on port `9090` inside the container, but you would visit `http://127.0.0.1:8080` on the host.
 
 Tagged images are also published with the release version, for example `ghcr.io/pb33f/printing-press:<release-version>`.
 
@@ -123,13 +123,13 @@ Tagged images are also published with the release version, for example `ghcr.io/
 Run a single spec:
 
 ```bash
-pp ./openapi.yaml
+ppress ./openapi.yaml
 ```
 
 Scan a repo tree and build an API catalog:
 
 ```bash
-pp ./services
+ppress ./services
 ```
 
 By default the output is written to `./api-docs` in your current working directory.
@@ -137,25 +137,25 @@ By default the output is written to `./api-docs` in your current working directo
 ## Build from source
 
 ```bash
-go build -o pp .
-./pp ./openapi.yaml
+go build -o ppress .
+./ppress ./openapi.yaml
 ```
 
 ## Usage
 
 ```bash
-pp [flags] <spec-path-or-url>
-pp [flags] <directory>
+ppress [flags] <spec-path-or-url>
+ppress [flags] <directory>
 ```
 
 Examples:
 
 ```bash
-pp ./openapi.yaml
-pp --publish --output ./api-docs ./openapi.yaml
-pp --serve --output ./api-docs ./openapi.yaml
-pp ./services
-pp --serve ./services
+ppress ./openapi.yaml
+ppress --publish --output ./api-docs ./openapi.yaml
+ppress --serve --output ./api-docs ./openapi.yaml
+ppress ./services
+ppress --serve ./services
 ```
 
 ## Single spec vs API catalog
@@ -167,7 +167,7 @@ If the input is a file or URL, `printing-press` renders one documentation site.
 Example:
 
 ```bash
-pp ./openapi.yaml
+ppress ./openapi.yaml
 ```
 
 Typical outputs:
@@ -196,7 +196,7 @@ services/
 Run:
 
 ```bash
-pp ./services
+ppress ./services
 ```
 
 That produces:
@@ -259,7 +259,7 @@ CLI flag values take precedence over config file values.
 You can also pass it explicitly:
 
 ```bash
-pp --config ./printing-press.yaml ./services
+ppress --config ./printing-press.yaml ./services
 ```
 
 Example:
@@ -320,13 +320,13 @@ state:
 Preview a single spec:
 
 ```bash
-pp --serve --output ./api-docs ./openapi.yaml
+ppress --serve --output ./api-docs ./openapi.yaml
 ```
 
 Preview an API catalog:
 
 ```bash
-pp --serve --output ./api-docs ./services
+ppress --serve --output ./api-docs ./services
 ```
 
 This starts a local preview server at `http://127.0.0.1:9090` by default.
@@ -336,13 +336,13 @@ This starts a local preview server at `http://127.0.0.1:9090` by default.
 Single spec:
 
 ```bash
-pp --publish --output ./api-docs ./openapi.yaml
+ppress --publish --output ./api-docs ./openapi.yaml
 ```
 
 API catalog:
 
 ```bash
-pp --publish --output ./api-docs ./services
+ppress --publish --output ./api-docs ./services
 ```
 
 This produces the hosted asset layout without starting a local server.
@@ -350,8 +350,8 @@ This produces the hosted asset layout without starting a local server.
 ## Debugging builds
 
 ```bash
-pp --debug ./openapi.yaml
-pp --debug ./services
+ppress --debug ./openapi.yaml
+ppress --debug ./services
 ```
 
 This disables interactive progress bars and streams styled build, activity, and parser logs live.

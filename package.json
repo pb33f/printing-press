@@ -21,11 +21,11 @@
     "pack:check": "npm pack --dry-run"
   },
   "bin": {
-    "pp": "bin/pp.js"
+    "ppress": "bin/ppress.js"
   },
   "files": [
     "README.md",
-    "bin/pp.js",
+    "bin/ppress.js",
     "npm-install/config.js",
     "npm-install/postinstall.js"
   ],

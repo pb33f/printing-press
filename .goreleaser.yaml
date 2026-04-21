@@ -5,7 +5,7 @@ project_name: printing-press
 builds:
   - id: default
     main: .
-    binary: pp
+    binary: ppress
     env:
       - CGO_ENABLED=0
       - GOWORK=off
@@ -22,7 +22,7 @@ builds:
 
   - id: darwin
     main: .
-    binary: pp
+    binary: ppress
     env:
       - CGO_ENABLED=0
       - GOWORK=off
@@ -76,7 +76,7 @@ homebrew_casks:
     homepage: "https://github.com/pb33f/printing-press"
     description: "CLI for the pb33f Printing Press engine"
     binaries:
-      - pp
+      - ppress
 
 snapshot:
   version_template: "{{ .Version }}-next"

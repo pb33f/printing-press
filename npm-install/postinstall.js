@@ -29,7 +29,8 @@ function normalizeVersion(version) {
 }
 
 function resolveVersion(packageJson) {
-  const requested = process.env.PP_INSTALL_VERSION || packageJson.version;
+  const requested =
+    process.env.PPRESS_INSTALL_VERSION || process.env.PP_INSTALL_VERSION || packageJson.version;
   const normalized = normalizeVersion(requested);
   if (!normalized) {
     fail("Missing version in package.json");
@@ -131,8 +132,10 @@ async function extractArchive(archivePath, destination, platform) {
 }
 
 async function install() {
-  if (process.env.PP_SKIP_POSTINSTALL === "1") {
-    console.log("Skipping printing-press postinstall because PP_SKIP_POSTINSTALL=1");
+  if (process.env.PPRESS_SKIP_POSTINSTALL === "1" || process.env.PP_SKIP_POSTINSTALL === "1") {
+    console.log(
+      "Skipping printing-press postinstall because PPRESS_SKIP_POSTINSTALL=1",
+    );
     return;
   }
 
@@ -142,7 +145,7 @@ async function install() {
   const platform = detectPlatform();
   const arch = detectArch();
   const asset = archiveName(version, platform, arch);
-  const tempDir = await fs.mkdtemp(join(tmpdir(), "pp-npm-"));
+  const tempDir = await fs.mkdtemp(join(tmpdir(), "ppress-npm-"));
   const archivePath = join(tempDir, asset);
   const checksumsPath = join(tempDir, "checksums.txt");
   const extractDir = join(tempDir, "extract");

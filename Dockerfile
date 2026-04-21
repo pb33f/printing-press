@@ -25,10 +25,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
       -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
-      -o /out/pp .
+      -o /out/ppress .
 
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /work
-COPY --from=builder /out/pp /usr/local/bin/pp
-ENTRYPOINT ["/usr/local/bin/pp"]
+COPY --from=builder /out/ppress /usr/local/bin/ppress
+ENTRYPOINT ["/usr/local/bin/ppress"]
 CMD ["--help"]

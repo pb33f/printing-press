@@ -21,13 +21,13 @@ Most browser-rendered docs behavior lives in `pb33f/doctor`, not here.
 Build the CLI:
 
 ```bash
-go build -o pp .
+go build -o ppress .
 ```
 
 Run it:
 
 ```bash
-./pp ./openapi.yaml
+./ppress ./openapi.yaml
 ```
 
 Test it:
@@ -51,7 +51,7 @@ There is no wrapper-owned UI rebuild or template-generation step here. Those bel
 For GitHub Pages, S3, Netlify, Cloudflare Pages, or similar static hosting, use:
 
 ```bash
-./pp --publish --output ./api-docs ./openapi.yaml
+./ppress --publish --output ./api-docs ./openapi.yaml
 ```
 
 ## Generated Output
