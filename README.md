@@ -45,6 +45,48 @@ pp version --verbose
 
 If you installed via `go install`, use `printing-press version` instead.
 
+## Container image
+
+Each tagged release also publishes a container image to GitHub Container Registry:
+
+```bash
+docker run --rm ghcr.io/pb33f/printing-press:latest version
+```
+
+To work with local specs and generated docs, bind mount host directories into the container. 
+The image already uses `pp` as its entrypoint and `/work` as its default working directory, so mounted files behave like local CLI inputs.
+
+Render docs from your current directory:
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/pb33f/printing-press:latest ./openapi.yaml
+```
+
+If you want to keep the input tree read-only and write docs to a separate host directory:
+
+```bash
+mkdir -p ./api-docs
+docker run --rm \
+  --mount type=bind,src="$PWD",target=/src,readonly \
+  --mount type=bind,src="$PWD/api-docs",target=/out \
+  -w /src \
+  ghcr.io/pb33f/printing-press:latest \
+  --output /out ./openapi.yaml
+```
+
+On Linux, add `--user "$(id -u):$(id -g)"` when you want generated files on the host to be owned by your current user:
+
+```bash
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --mount type=bind,src="$PWD",target=/work \
+  -w /work \
+  ghcr.io/pb33f/printing-press:latest \
+  ./openapi.yaml
+```
+
+Tagged images are also published with the release version, for example `ghcr.io/pb33f/printing-press:0.0.4`.
+
 ## Quick start
 
 Run a single spec:
@@ -178,20 +220,6 @@ You can disable any of these with:
 
 ## Aggregate build modes
 
-Directory/catalog builds support:
-
-- `--build-mode full`: rebuild everything
-- `--build-mode fast`: rescan and rebuild changed specs
-- `--build-mode watch`: watch-oriented incremental mode
-
-They also support pool tuning:
-
-- `--max-pools`
-- `--workers-per-pool`
-
-And skipped-render warning suppression in the generated catalog:
-
-- `--disable-skipped-rendering`
 
 ## Config file
 
@@ -251,8 +279,6 @@ state:
 - `--base-path`: Base path for resolving local file references
 - `--build-mode`: Aggregate build mode: `full`, `fast`, or `watch`
 - `--max-pools`: Aggregate max concurrent render pools
-- `--workers-per-pool`: Aggregate core budget per render pool
-- `--disable-skipped-rendering`: Hide skipped-render warnings from aggregate catalog pages
 - `--theme`: Terminal theme: `dark`, `roger`, or `tektronix`
 - `--no-logo`, `-b`: Disable the pb33f banner
 - `--debug`: Disable progress bars and stream build logs live
