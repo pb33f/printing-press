@@ -36,3 +36,60 @@ jobs:
 
       - name: Build
         run: go build ./...
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: printing-press:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=dev
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=unknown
+
+      - name: Smoke test container image
+        run: |
+          version="$(docker run --rm printing-press:smoke version)"
+          test -n "${version}"
+          docker run --rm printing-press:smoke version --verbose
+
+          tempdir="$(mktemp -d)"
+          trap 'rm -rf "${tempdir}"' EXIT
+
+          cat > "${tempdir}/openapi.yaml" <<'EOF'
+          openapi: 3.0.3
+          info:
+            title: Docker Smoke API
+            version: 1.0.0
+          paths:
+            /ping:
+              get:
+                operationId: ping
+                responses:
+                  "200":
+                    description: ok
+          EOF
+
+          docker run --rm \
+            --mount type=bind,src="${tempdir}",target=/work \
+            -w /work \
+            printing-press:smoke \
+            --output /work/out /work/openapi.yaml
+
+          test -f "${tempdir}/out/index.html"
