@@ -22,6 +22,16 @@ say() {
   printf '%s\n' "$*"
 }
 
+setup_color() {
+  if [ -t 1 ]; then
+    MAGENTA=$(printf '\033[35m')
+    RESET=$(printf '\033[m')
+  else
+    MAGENTA=""
+    RESET=""
+  fi
+}
+
 warn() {
   printf 'Warning: %s\n' "$*" >&2
 }
@@ -197,6 +207,8 @@ warn_if_not_on_path() {
 }
 
 main() {
+  setup_color
+
   command_exists curl || die "curl is required"
   command_exists tar || die "tar is required"
   command_exists mktemp || die "mktemp is required"
@@ -239,6 +251,28 @@ main() {
 
   say "Installed ${BINARY_NAME} to ${TARGET_DIR}/${BINARY_NAME}"
   "${TARGET_DIR}/${BINARY_NAME}" version || true
+
+  printf '%s' "${MAGENTA}"
+  cat <<EOF
+
+@@@@@@@   @@@@@@@   @@@@@@   @@@@@@   @@@@@@@@
+@@@@@@@@  @@@@@@@@  @@@@@@@  @@@@@@@  @@@@@@@@
+@@!  @@@  @@!  @@@      @@@      @@@  @@!
+!@!  @!@  !@   @!@      @!@      @!@  !@!
+@!@@!@!   @!@!@!@   @!@!!@   @!@!!@   @!!!:!
+!!@!!!    !!!@!!!!  !!@!@!   !!@!@!   !!!!!:
+!!:       !!:  !!!      !!:      !!:  !!:
+:!:       :!:  !:!      :!:      :!:  :!:
+ ::        :: ::::  :: ::::  :: ::::   ::
+ :        :: : ::    : : :    : : :    :
+
+https://github.com/${REPO_NAME}
+princess beef heavy industries presents: printing-press
+
+Ta-da! printing-press is now installed! Run '${BINARY_NAME}' to start the printing press
+
+EOF
+  printf '%s' "${RESET}"
 }
 
 main "$@"
