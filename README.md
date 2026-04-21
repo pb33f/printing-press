@@ -85,6 +85,21 @@ docker run --rm \
   ./openapi.yaml
 ```
 
+To serve docs from the container and view them in your browser, publish the container port to the host:
+
+```bash
+docker run --rm \
+  -p 9090:9090 \
+  --mount type=bind,src="$PWD",target=/work \
+  -w /work \
+  ghcr.io/pb33f/printing-press:latest \
+  --serve --port 9090 ./openapi.yaml
+```
+
+Then open `http://127.0.0.1:9090`.
+
+If you want a different host port, change the left side of `-p`. For example, `-p 8080:9090` still runs `pp` on port `9090` inside the container, but you would visit `http://127.0.0.1:8080` on the host.
+
 Tagged images are also published with the release version, for example `ghcr.io/pb33f/printing-press:0.0.4`.
 
 ## Quick start
