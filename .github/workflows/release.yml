@@ -99,7 +99,8 @@ jobs:
 
   publish-npm:
     needs: goreleaser
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # npm trusted publishing currently requires a GitHub-hosted runner.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
