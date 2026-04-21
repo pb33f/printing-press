@@ -32,6 +32,14 @@ npm i -g @pb33f/printing-press
 
 That also installs the `pp` executable by downloading the matching release binary for your platform.
 
+Install with Homebrew:
+
+```bash
+brew install pb33f/taps/printing-press
+```
+
+That also installs the `pp` executable.
+
 If you prefer `go install`, Go will still name the binary `printing-press` because it derives command names from the module path:
 
 ```bash
