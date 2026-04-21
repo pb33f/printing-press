@@ -87,6 +87,7 @@ jobs:
           EOF
 
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             --mount type=bind,src="${tempdir}",target=/work \
             -w /work \
             printing-press:smoke \

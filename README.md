@@ -74,7 +74,7 @@ docker run --rm \
   --output /out ./openapi.yaml
 ```
 
-On Linux, add `--user "$(id -u):$(id -g)"` when you want generated files on the host to be owned by your current user:
+On Linux, add `--user "$(id -u):$(id -g)"` for bind-mounted runs so the container can read and write host files as your current user instead of hitting permission problems or leaving root-owned output behind:
 
 ```bash
 docker run --rm \
@@ -232,9 +232,6 @@ You can disable any of these with:
 - `--no-html`
 - `--no-json`
 - `--no-llm`
-
-## Aggregate build modes
-
 
 ## Config file
 
