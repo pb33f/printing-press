@@ -2,8 +2,7 @@
 
 ## Purpose
 
-`pb33f/printing-press` is the CLI wrapper around the Printing Press renderer.
-It is responsible for:
+`pb33f/printing-press` is the CLI wrapper around the Printing Press renderer. It is responsible for:
 
 - loading a local or remote OpenAPI source
 - choosing build and output modes
@@ -15,18 +14,29 @@ It is responsible for:
 - CLI and preview-server behavior live in `pb33f/printing-press`
 - Core rendering logic, generated templates, and docs UI live in `pb33f/doctor`
 
-When changing browser-rendered docs behavior, expect the main implementation to live in `pb33f/doctor`, not here.
+Most browser-rendered docs behavior lives in `pb33f/doctor`, not here.
 
-## Building From Source
+## Common Commands
 
-Build this repo directly with Go:
+Build the CLI:
 
 ```bash
-go build ./...
-go run pp.go ./openapi.yaml
+go build -o pp .
 ```
 
-There is no wrapper-owned UI rebuild or template-generation step here. Those are the responsibility of `pb33f/doctor`, not this CLI repo.
+Run it:
+
+```bash
+./pp ./openapi.yaml
+```
+
+Test it:
+
+```bash
+go test ./...
+```
+
+There is no wrapper-owned UI rebuild or template-generation step here. Those belong to `pb33f/doctor`.
 
 ## Build Modes
 
@@ -41,20 +51,12 @@ There is no wrapper-owned UI rebuild or template-generation step here. Those are
 For GitHub Pages, S3, Netlify, Cloudflare Pages, or similar static hosting, use:
 
 ```bash
-go run pp.go --publish --output ./api-docs ./openapi.yaml
+./pp --publish --output ./api-docs ./openapi.yaml
 ```
 
 ## Generated Output
 
 This repo writes generated documentation to an output directory such as `./api-docs`.
 That output is generated content, not hand-maintained project source.
-
-## Testing
-
-Typical validation:
-
-```bash
-go test ./...
-```
 
 If a change touches rendering behavior in `pb33f/doctor`, run the relevant tests there as well.

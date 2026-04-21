@@ -7,12 +7,14 @@
 > `printing-press` is currently in preview and is not intended for production use.
 ---
 
-`printing-press` is the CLI for the `pb33f/doctor` Printing Press engine. It can:
+OpenAPI documentation that is:
 
-- render a single OpenAPI spec into static documentation
-- scan a directory tree, discover many specs, and build an API catalog
-- emit HTML, JSON, and LLM-oriented artifacts
-- build portable offline docs or hosted docs for static serving
+- High Quality
+- Designed for Agents and Humans
+- Beautiful & Clean
+- Detailed & Rich
+- Fast & Offline
+- Instant & Complete
 
 ## Install
 
@@ -30,15 +32,13 @@ Install the npm wrapper package:
 npm i -g @pb33f/printing-press
 ```
 
-That also installs the `pp` executable by downloading the matching release binary for your platform.
-
 Install with Homebrew:
 
 ```bash
 brew install pb33f/taps/printing-press
 ```
 
-That also installs the `pp` executable.
+Both the npm package and the Homebrew cask install the `pp` executable.
 
 If you prefer `go install`, Go will still name the binary `printing-press` because it derives command names from the module path:
 
@@ -116,20 +116,20 @@ Then open `http://127.0.0.1:9090`.
 
 If you want a different host port, change the left side of `-p`. For example, `-p 8080:9090` still runs `pp` on port `9090` inside the container, but you would visit `http://127.0.0.1:8080` on the host.
 
-Tagged images are also published with the release version, for example `ghcr.io/pb33f/printing-press:0.0.4`.
+Tagged images are also published with the release version, for example `ghcr.io/pb33f/printing-press:<release-version>`.
 
 ## Quick start
 
 Run a single spec:
 
 ```bash
-go run pp.go ./openapi.yaml
+pp ./openapi.yaml
 ```
 
 Scan a repo tree and build an API catalog:
 
 ```bash
-go run pp.go ./services
+pp ./services
 ```
 
 By default the output is written to `./api-docs` in your current working directory.
@@ -154,12 +154,8 @@ Examples:
 pp ./openapi.yaml
 pp --publish --output ./api-docs ./openapi.yaml
 pp --serve --output ./api-docs ./openapi.yaml
-pp --debug ./openapi.yaml
-pp --theme roger ./openapi.yaml
 pp ./services
 pp --serve ./services
-pp --build-mode fast ./services
-pp --disable-skipped-rendering ./services
 ```
 
 ## Single spec vs API catalog
@@ -257,6 +253,8 @@ The CLI will look for it:
 
 - next to the input file or directory
 - in the current working directory
+
+CLI flag values take precedence over config file values.
 
 You can also pass it explicitly:
 
