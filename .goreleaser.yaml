@@ -66,5 +66,19 @@ changelog:
       - '^chore:'
       - '^ci:'
 
+homebrew_casks:
+  - repository:
+      owner: pb33f
+      name: homebrew-taps
+
+    commit_author:
+      name: pb33f github bot
+      email: github@pb33f.io
+
+    homepage: "https://github.com/pb33f/printing-press"
+    description: "CLI for the pb33f Printing Press engine"
+    binaries:
+      - pp
+
 snapshot:
   version_template: "{{ .Version }}-next"
