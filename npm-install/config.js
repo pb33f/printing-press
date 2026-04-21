@@ -8,7 +8,6 @@ export const CONFIG = {
 
 export const ARCH_MAPPING = {
   arm64: "arm64",
-  ia32: "i386",
   x64: "x86_64",
 };
 
