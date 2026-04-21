@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       GOWORK: off
     steps:
@@ -38,7 +38,7 @@ jobs:
         run: go build ./...
 
   docker-smoke:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
     steps:
@@ -96,7 +96,7 @@ jobs:
           test -f "${tempdir}/out/index.html"
 
   npm-package:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
     steps:
