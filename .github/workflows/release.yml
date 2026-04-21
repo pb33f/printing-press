@@ -11,7 +11,7 @@ env:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       GOWORK: off
     permissions:
@@ -42,7 +42,7 @@ jobs:
 
   publish-container:
     needs: goreleaser
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
       packages: write
@@ -99,7 +99,7 @@ jobs:
 
   publish-npm:
     needs: goreleaser
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
       id-token: write

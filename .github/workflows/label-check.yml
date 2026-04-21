@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   require-release-label:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Verify release label
         uses: actions/github-script@v7
