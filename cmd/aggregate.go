@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pb33f/doctor/printingpress"
@@ -92,8 +93,13 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 }
 
 func buildAggregateConfig(scanRoot, outputDir, assetMode string, opts *rootOptions, fileConfig *printingPressConfigFile) *printingpress.AggregatePrintingPressConfig {
+	catalogTitle := opts.title
+	if override := strings.TrimSpace(opts.catalogTitle); override != "" {
+		catalogTitle = override
+	}
+
 	cfg := &printingpress.AggregatePrintingPressConfig{
-		Title:                   opts.title,
+		Title:                   catalogTitle,
 		Description:             opts.description,
 		ScanRoot:                scanRoot,
 		OutputDir:               outputDir,
@@ -103,6 +109,7 @@ func buildAggregateConfig(scanRoot, outputDir, assetMode string, opts *rootOptio
 		MaxPools:                opts.maxPools,
 		WorkersPerPool:          opts.workersPerPool,
 		DisableSkippedRendering: opts.disableSkippedRendering,
+		Footer:                  buildFooterConfig(opts),
 	}
 	if fileConfig == nil {
 		return cfg

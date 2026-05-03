@@ -30,6 +30,7 @@ type printingPressConfigFile struct {
 	Grouping    printingPressGroupingConfig `mapstructure:"grouping"`
 	Build       printingPressBuildConfig    `mapstructure:"build"`
 	State       printingPressStateConfig    `mapstructure:"state"`
+	Footer      printingPressFooterConfig   `mapstructure:"footer"`
 }
 
 type printingPressScanConfig struct {
@@ -64,6 +65,13 @@ type printingPressStateConfig struct {
 
 type printingPressSQLiteStateFile struct {
 	Path string `mapstructure:"path"`
+}
+
+type printingPressFooterConfig struct {
+	Enabled   *bool  `mapstructure:"enabled"`
+	URL       string `mapstructure:"url"`
+	LinkTitle string `mapstructure:"linkTitle"`
+	Content   string `mapstructure:"content"`
 }
 
 func loadPrintingPressConfig(configPath, inputArg string) (*printingPressConfigFile, error) {
@@ -151,6 +159,9 @@ func applyConfigToRootOptions(cmd *cobra.Command, opts *rootOptions, fileConfig 
 	applyIntFlag(cmd, "max-pools", &opts.maxPools, fileConfig.Build.MaxPools)
 	applyIntFlag(cmd, "workers-per-pool", &opts.workersPerPool, fileConfig.Build.WorkersPerPool)
 	applyBoolFlag(cmd, "disable-skipped-rendering", &opts.disableSkippedRendering, fileConfig.Build.DisableSkippedRendering)
+	applyStringFlag(cmd, "footer-url", &opts.footerURL, fileConfig.Footer.URL)
+	applyStringFlag(cmd, "footer-link-title", &opts.footerLinkTitle, fileConfig.Footer.LinkTitle)
+	applyStringFlag(cmd, "footer-content", &opts.footerContent, fileConfig.Footer.Content)
 	applyBoolFlag(cmd, "no-logo", &opts.noLogo, fileConfig.NoLogo)
 	applyBoolFlag(cmd, "no-html", &opts.noHTML, fileConfig.NoHTML)
 	applyBoolFlag(cmd, "no-llm", &opts.noLLM, fileConfig.NoLLM)
@@ -162,6 +173,9 @@ func applyConfigToRootOptions(cmd *cobra.Command, opts *rootOptions, fileConfig 
 
 	if !cmd.Flags().Changed("title") {
 		opts.description = strings.TrimSpace(fileConfig.Description)
+	}
+	if fileConfig.Footer.Enabled != nil && !cmd.Flags().Changed("no-footer") {
+		opts.noFooter = !*fileConfig.Footer.Enabled
 	}
 }
 

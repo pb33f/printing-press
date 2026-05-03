@@ -46,6 +46,7 @@ type buildLoggerSession struct {
 type rootOptions struct {
 	outputDir               string
 	title                   string
+	catalogTitle            string
 	description             string
 	baseURL                 string
 	basePath                string
@@ -55,7 +56,13 @@ type rootOptions struct {
 	maxPools                int
 	workersPerPool          int
 	disableSkippedRendering bool
+	footerURL               string
+	footerLinkTitle         string
+	footerContent           string
+	vacuumReport            string
+	vacuumReportStdin       bool
 	noLogo                  bool
+	noFooter                bool
 	noHTML                  bool
 	noLLM                   bool
 	noJSON                  bool
@@ -131,6 +138,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.AddCommand(a.newVersionCommand())
 	cmd.Flags().StringVarP(&opts.outputDir, "output", "o", "", "Output directory for rendered docs")
 	cmd.Flags().StringVar(&opts.title, "title", "", "Override the API title")
+	cmd.Flags().StringVar(&opts.catalogTitle, "catalog-title", "", "Override the API catalog title")
 	cmd.Flags().StringVar(&opts.configPath, "config", "", "Path to a printing-press.yaml config file")
 	cmd.Flags().StringVar(&opts.baseURL, "base-url", "", "Base URL to use in generated HTML")
 	cmd.Flags().StringVar(&opts.basePath, "base-path", "", "Base path for resolving local file references")
@@ -138,8 +146,14 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.Flags().IntVar(&opts.maxPools, "max-pools", 0, "Aggregate max concurrent render pools")
 	cmd.Flags().IntVar(&opts.workersPerPool, "workers-per-pool", 0, "Aggregate core budget per render pool")
 	cmd.Flags().BoolVar(&opts.disableSkippedRendering, "disable-skipped-rendering", false, "Hide skipped-render warnings from aggregate catalog pages")
+	cmd.Flags().StringVar(&opts.footerURL, "footer-url", "", "Footer link URL for generated HTML")
+	cmd.Flags().StringVar(&opts.footerLinkTitle, "footer-link-title", "", "Footer link text/title for generated HTML")
+	cmd.Flags().StringVar(&opts.footerContent, "footer-content", "", "Footer trailing content text for generated HTML")
+	cmd.Flags().StringVar(&opts.vacuumReport, "vacuum-report", "", "Path to a vacuum sealed report to render as lint diagnostics")
+	cmd.Flags().BoolVarP(&opts.vacuumReportStdin, "stdin", "i", false, "Read a vacuum sealed report from stdin for lint diagnostics")
 	cmd.Flags().StringVar(&opts.theme, "theme", string(terminal.ThemeDark), "Terminal theme: dark, roger, or tektronix")
 	cmd.Flags().BoolVarP(&opts.noLogo, "no-logo", "b", false, "Disable the pb33f banner")
+	cmd.Flags().BoolVar(&opts.noFooter, "no-footer", false, "Disable the generated HTML footer")
 	cmd.Flags().BoolVar(&opts.noHTML, "no-html", false, "Skip HTML output")
 	cmd.Flags().BoolVar(&opts.noLLM, "no-llm", false, "Skip LLM output")
 	cmd.Flags().BoolVar(&opts.noJSON, "no-json", false, "Skip JSON artifact output")
@@ -215,26 +229,38 @@ func (a *application) runRoot(cmd *cobra.Command, args []string, opts *rootOptio
 
 	inputArg, inputSet := resolveBuildInput(args, fileConfig)
 	if !inputSet {
+		if hasDeveloperDiagnosticsInput(opts) {
+			return &cliError{
+				message: "expected exactly one spec path, directory, or URL",
+				hint:    "--stdin reads the vacuum report; pass the OpenAPI spec as the positional argument.",
+			}
+		}
 		a.printWelcome(opts, palette)
 		return nil
 	}
 
-	return a.runBuild(inputArg, opts, palette, fileConfig)
+	return a.runBuild(inputArg, opts, palette, fileConfig, cmd.InOrStdin())
 }
 
-func (a *application) runBuild(specArg string, opts *rootOptions, palette terminal.Palette, fileConfig *printingPressConfigFile) (err error) {
+func (a *application) runBuild(specArg string, opts *rootOptions, palette terminal.Palette, fileConfig *printingPressConfigFile, diagnosticsInput io.Reader) (err error) {
 	if !isRemoteInput(specArg) {
 		absPath, absErr := filepath.Abs(specArg)
 		if absErr == nil {
 			if info, statErr := os.Stat(absPath); statErr == nil && info.IsDir() {
+				if hasDeveloperDiagnosticsInput(opts) {
+					return &cliError{
+						message: "lint diagnostics are only supported for single-spec builds",
+						hint:    "Pass a single OpenAPI file or URL with --stdin or --vacuum-report.",
+					}
+				}
 				return a.runAggregateBuild(absPath, opts, palette, fileConfig)
 			}
 		}
 	}
-	return a.runSingleSpecBuild(specArg, opts, palette)
+	return a.runSingleSpecBuild(specArg, opts, palette, diagnosticsInput)
 }
 
-func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, palette terminal.Palette) (err error) {
+func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, palette terminal.Palette, diagnosticsInput io.Reader) (err error) {
 	if opts.noHTML && opts.noLLM && opts.noJSON {
 		return &cliError{
 			message: "all output types are disabled",
@@ -276,13 +302,25 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 		assetMode = printingpress.HTMLAssetModeServed
 	}
 
+	developerMode, lintResults, err := resolveDeveloperDiagnostics(opts, diagnosticsInput)
+	if err != nil {
+		return &cliError{
+			message: "unable to load lint report",
+			hint:    "Pass a vacuum sealed report generated by 'vacuum report'.",
+			detail:  err.Error(),
+		}
+	}
+
 	pp, err := printingpress.CreatePrintingPressFromBytes(source.specBytes, &printingpress.PrintingPressConfig{
-		Title:     opts.title,
-		BaseURL:   opts.baseURL,
-		BasePath:  source.basePath,
-		SpecPath:  source.specPath,
-		OutputDir: outputDir,
-		AssetMode: assetMode,
+		Title:         opts.title,
+		BaseURL:       opts.baseURL,
+		BasePath:      source.basePath,
+		SpecPath:      source.specPath,
+		OutputDir:     outputDir,
+		AssetMode:     assetMode,
+		DeveloperMode: developerMode,
+		LintResults:   lintResults,
+		Footer:        buildFooterConfig(opts),
 	})
 	if err != nil {
 		return &cliError{
@@ -462,6 +500,24 @@ func paletteForArgs(args []string) terminal.Palette {
 		}
 	}
 	return terminal.PaletteForTheme(theme)
+}
+
+func buildFooterConfig(opts *rootOptions) *ppmodel.FooterConfig {
+	if opts == nil {
+		return nil
+	}
+	footerURL := strings.TrimSpace(opts.footerURL)
+	footerLinkTitle := strings.TrimSpace(opts.footerLinkTitle)
+	footerContent := strings.TrimSpace(opts.footerContent)
+	if !opts.noFooter && footerURL == "" && footerLinkTitle == "" && footerContent == "" {
+		return nil
+	}
+	return &ppmodel.FooterConfig{
+		Disabled:  opts.noFooter,
+		URL:       footerURL,
+		LinkTitle: footerLinkTitle,
+		Build:     footerContent,
+	}
 }
 
 func firstArg(args []string) string {
