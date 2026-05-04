@@ -20,5 +20,5 @@ export const PLATFORM_MAPPING = {
 export const EXTENSION_MAPPING = {
   darwin: "tar.gz",
   linux: "tar.gz",
-  win32: "zip",
+  windows: "zip",
 };

@@ -18,7 +18,7 @@ OpenAPI documentation that is:
 
 ## Install
 
-Install the latest tagged release binary with the shell installer:
+Install the latest tagged release binary with the shell installer on macOS or Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pb33f/printing-press/main/scripts/install_printing_press.sh | sh
@@ -31,6 +31,8 @@ Install the npm wrapper package:
 ```bash
 npm i -g @pb33f/printing-press
 ```
+
+Use npm on Windows, or download the `windows_x86_64.zip` or `windows_arm64.zip` asset from the GitHub release.
 
 Install with Homebrew:
 

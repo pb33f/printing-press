@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import AdmZip from "adm-zip";
 import * as tar from "tar";
@@ -66,7 +66,7 @@ function archiveExtension(platform) {
   return extension;
 }
 
-function archiveName(version, platform, arch) {
+export function archiveName(version, platform, arch) {
   return `${CONFIG.archiveName}_${version}_${platform}_${arch}.${archiveExtension(platform)}`;
 }
 
@@ -119,8 +119,8 @@ async function verifyChecksum(filePath, checksumsFile) {
   }
 }
 
-async function extractArchive(archivePath, destination, platform) {
-  if (platform === "win32") {
+export async function extractArchive(archivePath, destination, platform) {
+  if (platform === "windows") {
     const zip = new AdmZip(archivePath);
     zip.extractAllTo(destination, true);
     return;
@@ -167,7 +167,7 @@ async function install() {
     await downloadFile(downloadUrl(tag, asset), archivePath);
     await downloadFile(checksumsUrl(tag), checksumsPath);
     await verifyChecksum(archivePath, checksumsPath);
-    await extractArchive(archivePath, extractDir, process.platform);
+    await extractArchive(archivePath, extractDir, platform);
 
     if (!existsSync(extractedBinary)) {
       fail(`Archive did not contain ${basename(extractedBinary)}`);
@@ -182,7 +182,13 @@ async function install() {
   }
 }
 
-install().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+function isMainModule() {
+  return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+}
+
+if (isMainModule()) {
+  install().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}

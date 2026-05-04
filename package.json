@@ -18,6 +18,7 @@
   },
   "scripts": {
     "postinstall": "node ./npm-install/postinstall.js",
+    "test": "node --test",
     "pack:check": "npm pack --dry-run"
   },
   "bin": {
