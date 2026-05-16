@@ -244,7 +244,7 @@ func TestRootCommand_DebugStreamsActivityLogs(t *testing.T) {
 	cmd.SetArgs([]string{"--no-logo", "--debug", "--output", outputDir, specPath})
 
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, stderr.String(), "building libopenapi document")
+	assert.Contains(t, stderr.String(), "indexing rolodex")
 	assert.Contains(t, stderr.String(), "building v3 model")
 	assert.Contains(t, stderr.String(), "JSON complete")
 }
