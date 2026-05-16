@@ -7,7 +7,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.6
 	charm.land/lipgloss/v2 v2.0.3
 	github.com/daveshanley/vacuum v0.26.4
-	github.com/pb33f/doctor v0.0.62
+	github.com/pb33f/doctor v0.0.65
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1

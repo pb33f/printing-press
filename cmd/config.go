@@ -11,26 +11,27 @@ import (
 )
 
 type printingPressConfigFile struct {
-	configDir   string
-	Title       string                      `mapstructure:"title"`
-	Description string                      `mapstructure:"description"`
-	Output      string                      `mapstructure:"output"`
-	BaseURL     string                      `mapstructure:"baseURL"`
-	BasePath    string                      `mapstructure:"basePath"`
-	Theme       string                      `mapstructure:"theme"`
-	NoLogo      bool                        `mapstructure:"noLogo"`
-	NoHTML      bool                        `mapstructure:"noHTML"`
-	NoLLM       bool                        `mapstructure:"noLLM"`
-	NoJSON      bool                        `mapstructure:"noJSON"`
-	Publish     bool                        `mapstructure:"publish"`
-	Serve       bool                        `mapstructure:"serve"`
-	Debug       bool                        `mapstructure:"debug"`
-	Port        int                         `mapstructure:"port"`
-	Scan        printingPressScanConfig     `mapstructure:"scan"`
-	Grouping    printingPressGroupingConfig `mapstructure:"grouping"`
-	Build       printingPressBuildConfig    `mapstructure:"build"`
-	State       printingPressStateConfig    `mapstructure:"state"`
-	Footer      printingPressFooterConfig   `mapstructure:"footer"`
+	configDir     string
+	Title         string                      `mapstructure:"title"`
+	Description   string                      `mapstructure:"description"`
+	Output        string                      `mapstructure:"output"`
+	BaseURL       string                      `mapstructure:"baseURL"`
+	BasePath      string                      `mapstructure:"basePath"`
+	Theme         string                      `mapstructure:"theme"`
+	NoLogo        bool                        `mapstructure:"noLogo"`
+	DisableExport bool                        `mapstructure:"disableExport"`
+	NoHTML        bool                        `mapstructure:"noHTML"`
+	NoLLM         bool                        `mapstructure:"noLLM"`
+	NoJSON        bool                        `mapstructure:"noJSON"`
+	Publish       bool                        `mapstructure:"publish"`
+	Serve         bool                        `mapstructure:"serve"`
+	Debug         bool                        `mapstructure:"debug"`
+	Port          int                         `mapstructure:"port"`
+	Scan          printingPressScanConfig     `mapstructure:"scan"`
+	Grouping      printingPressGroupingConfig `mapstructure:"grouping"`
+	Build         printingPressBuildConfig    `mapstructure:"build"`
+	State         printingPressStateConfig    `mapstructure:"state"`
+	Footer        printingPressFooterConfig   `mapstructure:"footer"`
 }
 
 type printingPressScanConfig struct {
@@ -163,6 +164,7 @@ func applyConfigToRootOptions(cmd *cobra.Command, opts *rootOptions, fileConfig 
 	applyStringFlag(cmd, "footer-link-title", &opts.footerLinkTitle, fileConfig.Footer.LinkTitle)
 	applyStringFlag(cmd, "footer-content", &opts.footerContent, fileConfig.Footer.Content)
 	applyBoolFlag(cmd, "no-logo", &opts.noLogo, fileConfig.NoLogo)
+	applyBoolFlag(cmd, "disable-export", &opts.disableExport, fileConfig.DisableExport)
 	applyBoolFlag(cmd, "no-html", &opts.noHTML, fileConfig.NoHTML)
 	applyBoolFlag(cmd, "no-llm", &opts.noLLM, fileConfig.NoLLM)
 	applyBoolFlag(cmd, "no-json", &opts.noJSON, fileConfig.NoJSON)
