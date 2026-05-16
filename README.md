@@ -238,6 +238,7 @@ The intent is:
 - `--serve`: hosted/served HTML asset layout and starts a local preview server
 
 For GitHub Pages, S3, Netlify, Cloudflare Pages, or similar static hosting, use `--publish`.
+When using `--serve`, the local preview includes archive export controls by default. Add `--disable-export` to hide those controls and disable the local export endpoint.
 
 ## Outputs
 
@@ -372,6 +373,7 @@ state:
 - `--stdin`, `-i`: Read a vacuum sealed report from standard input for lint diagnostics
 - `--publish`: Build hosted/served HTML assets without starting a local server
 - `--serve`: Serve the rendered output after building
+- `--disable-export`: Disable local preview archive export controls and the `--serve` export endpoint
 - `--port`: Port to use with `--serve`
 
 ## Local preview
@@ -389,6 +391,11 @@ ppress --serve --output ./api-docs ./services
 ```
 
 This starts a local preview server at `http://127.0.0.1:9090` by default.
+Use `--disable-export` with `--serve` when you want the preview without the export documentation panel:
+
+```bash
+ppress --serve --disable-export --output ./api-docs ./openapi.yaml
+```
 
 ## Static hosting
 

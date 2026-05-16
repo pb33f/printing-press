@@ -33,7 +33,7 @@ type application struct {
 	stdout     io.Writer
 	stderr     io.Writer
 	httpClient *http.Client
-	serveFn    func(addr, dir, baseURL string) error
+	serveFn    func(addr string, opts staticServerOptions) error
 }
 
 type buildLoggerSession struct {
@@ -63,6 +63,7 @@ type rootOptions struct {
 	vacuumReportStdin       bool
 	noLogo                  bool
 	noFooter                bool
+	disableExport           bool
 	noHTML                  bool
 	noLLM                   bool
 	noJSON                  bool
@@ -154,6 +155,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.theme, "theme", string(terminal.ThemeDark), "Terminal theme: dark, roger, or tektronix")
 	cmd.Flags().BoolVarP(&opts.noLogo, "no-logo", "b", false, "Disable the pb33f banner")
 	cmd.Flags().BoolVar(&opts.noFooter, "no-footer", false, "Disable the generated HTML footer")
+	cmd.Flags().BoolVar(&opts.disableExport, "disable-export", false, "Disable local preview archive export controls")
 	cmd.Flags().BoolVar(&opts.noHTML, "no-html", false, "Skip HTML output")
 	cmd.Flags().BoolVar(&opts.noLLM, "no-llm", false, "Skip LLM output")
 	cmd.Flags().BoolVar(&opts.noJSON, "no-json", false, "Skip JSON artifact output")
@@ -311,16 +313,18 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 		}
 	}
 
+	footer := buildFooterConfig(opts)
 	pp, err := printingpress.CreatePrintingPressFromBytes(source.specBytes, &printingpress.PrintingPressConfig{
-		Title:         opts.title,
-		BaseURL:       opts.baseURL,
-		BasePath:      source.basePath,
-		SpecPath:      source.specPath,
-		OutputDir:     outputDir,
-		AssetMode:     assetMode,
-		DeveloperMode: developerMode,
-		LintResults:   lintResults,
-		Footer:        buildFooterConfig(opts),
+		Title:            opts.title,
+		BaseURL:          opts.baseURL,
+		BasePath:         source.basePath,
+		SpecPath:         source.specPath,
+		OutputDir:        outputDir,
+		AssetMode:        assetMode,
+		DeveloperMode:    developerMode,
+		ArchiveExportURL: archiveExportURLForServe(opts),
+		LintResults:      lintResults,
+		Footer:           footer,
 	})
 	if err != nil {
 		return &cliError{
@@ -385,8 +389,26 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 	a.printSummary(palette, site, htmlStats, llmStats, time.Since(buildStart), fileCount, totalBytes)
 
 	if opts.serve {
+		serveOpts := staticServerOptions{
+			Dir:           site.OutputDir,
+			BaseURL:       site.BaseURL,
+			DisableExport: opts.disableExport,
+		}
+		if !opts.disableExport {
+			archiveDirs, err := renderServeArchiveDirs(*source, opts, lintResults, footer)
+			if err != nil {
+				return &cliError{message: "unable to render served archive export", detail: err.Error()}
+			}
+			defer archiveDirs.cleanup()
+			if archiveDirs != nil {
+				serveOpts.ArchiveDir = archiveDirs.plain
+				serveOpts.DiagnosticsArchiveDir = archiveDirs.diagnostics
+				serveOpts.LLMArchiveDir = archiveDirs.llm
+				serveOpts.DiagnosticsLLMArchiveDir = archiveDirs.diagnosticLLM
+			}
+		}
 		fmt.Fprintf(a.stdout, "serving http://127.0.0.1:%d from %s\n", opts.port, site.OutputDir)
-		if err := a.serveFn(fmt.Sprintf(":%d", opts.port), site.OutputDir, site.BaseURL); err != nil {
+		if err := a.serveFn(fmt.Sprintf(":%d", opts.port), serveOpts); err != nil {
 			return &cliError{message: "unable to serve rendered output", detail: err.Error()}
 		}
 	}
@@ -748,19 +770,41 @@ func humanBytes(size int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(size)/float64(div), "KMGTPE"[exp])
 }
 
-func serveOutputDir(addr, dir, baseURL string) error {
-	return http.ListenAndServe(addr, newStaticServer(dir, baseURL))
+func serveOutputDir(addr string, opts staticServerOptions) error {
+	return http.ListenAndServe(addr, newStaticServerWithOptions(opts))
 }
 
 func newStaticServer(dir, baseURL string) http.Handler {
-	fileServer := newStaticFileServer(dir)
-	mountPath := resolveServeMountPath(baseURL)
+	return newStaticServerWithOptions(staticServerOptions{
+		Dir:     dir,
+		BaseURL: baseURL,
+	})
+}
+
+func newStaticServerWithOptions(opts staticServerOptions) http.Handler {
+	fileServer := newStaticFileServer(opts.Dir)
+	var exportHandler http.Handler
+	if !opts.DisableExport {
+		exportHandler = newStaticExportHandler(opts)
+	}
+	mountPath := resolveServeMountPath(opts.BaseURL)
 	if mountPath == "/" {
-		return fileServer
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == serveArchiveExportEndpoint {
+				if exportHandler != nil {
+					exportHandler.ServeHTTP(w, r)
+					return
+				}
+				http.NotFound(w, r)
+				return
+			}
+			fileServer.ServeHTTP(w, r)
+		})
 	}
 
 	mountPrefix := strings.TrimSuffix(mountPath, "/")
 	mountedFileServer := http.StripPrefix(mountPrefix, fileServer)
+	mountedExportPath := mountPrefix + serveArchiveExportEndpoint
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/":
@@ -768,6 +812,13 @@ func newStaticServer(dir, baseURL string) http.Handler {
 			return
 		case mountPrefix:
 			http.Redirect(w, r, mountPath, http.StatusTemporaryRedirect)
+			return
+		case mountedExportPath:
+			if exportHandler != nil {
+				exportHandler.ServeHTTP(w, r)
+				return
+			}
+			http.NotFound(w, r)
 			return
 		}
 		if !strings.HasPrefix(r.URL.Path, mountPath) {
@@ -853,11 +904,14 @@ func cachePolicyForPath(requestPath string) string {
 	return "no-store"
 }
 
+// hasServeStaticPath returns true for the two namespaces the SPA navigates
+// against and that change between rebuilds: the renderer's shared static
+// bundle (CSS/JS/fonts/icons under /static/) and the per-spec hydration data
+// (/data/ — page JSON, viz JSON, nav cache). Both should revalidate so a
+// rebuild is picked up without a browser refresh.
 func hasServeStaticPath(requestPath string) bool {
 	return strings.Contains(requestPath, "/static/") ||
-		strings.Contains(requestPath, "/static/page-data/") ||
-		strings.Contains(requestPath, "/static/page-viz/") ||
-		strings.Contains(requestPath, "/static/printing-press-shared.")
+		strings.Contains(requestPath, "/data/")
 }
 
 func shouldGzipResponse(r *http.Request) bool {

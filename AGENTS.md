@@ -43,6 +43,7 @@ There is no wrapper-owned UI rebuild or template-generation step here. Those bel
 - Default build: portable HTML assets for offline or `file://` usage
 - `--publish`: hosted/served HTML assets without starting a local server
 - `--serve`: hosted/served HTML assets and starts the local preview server
+- `--disable-export`: when combined with `--serve`, hides local archive export controls and disables the preview export endpoint
 
 `--serve` is for local development only. It is not intended as a production server.
 
