@@ -1,0 +1,129 @@
+openapi: 3.1.0
+info:
+  title: Trips API
+  summary: Search train trips between stations.
+  description: |
+    The Trips API returns route options, departure times, arrival times, and
+    fare estimates for train travel search experiences.
+  version: v1
+  contact:
+    name: Train Travel Platform
+    email: platform@example.com
+servers:
+  - url: https://api.example.com/trips/v1
+    description: Production
+tags:
+  - name: Trips
+    description: Trip search and itinerary endpoints.
+paths:
+  /trips:
+    get:
+      operationId: searchTrips
+      summary: Search trips
+      description: Find trip options between an origin and destination station.
+      tags:
+        - Trips
+      parameters:
+        - name: origin
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: destination
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: departureDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Matching trip options.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Trip'
+  /trips/{tripId}:
+    get:
+      operationId: getTrip
+      summary: Get a trip
+      tags:
+        - Trips
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Trip details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+components:
+  schemas:
+    Trip:
+      type: object
+      required:
+        - id
+        - origin
+        - destination
+        - departureTime
+        - arrivalTime
+        - fare
+      properties:
+        id:
+          type: string
+          format: uuid
+        origin:
+          $ref: '#/components/schemas/StationRef'
+        destination:
+          $ref: '#/components/schemas/StationRef'
+        departureTime:
+          type: string
+          format: date-time
+        arrivalTime:
+          type: string
+          format: date-time
+        fare:
+          $ref: '#/components/schemas/Money'
+    StationRef:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    Money:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3

@@ -1,0 +1,122 @@
+openapi: 3.1.0
+info:
+  title: Payments API
+  summary: Collect and inspect train booking payments.
+  description: |
+    The Payments API collects card payments for bookings and exposes payment
+    status for customer support workflows.
+  version: v1
+  contact:
+    name: Train Travel Platform
+    email: platform@example.com
+servers:
+  - url: https://api.example.com/payments/v1
+    description: Production
+tags:
+  - name: Payments
+    description: Booking payment endpoints.
+paths:
+  /payments:
+    post:
+      operationId: createPayment
+      summary: Create a payment
+      tags:
+        - Payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Payment accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+  /payments/{paymentId}:
+    get:
+      operationId: getPayment
+      summary: Get a payment
+      tags:
+        - Payments
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Payment details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+components:
+  schemas:
+    CreatePaymentRequest:
+      type: object
+      required:
+        - bookingId
+        - amount
+        - method
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+    Payment:
+      type: object
+      required:
+        - id
+        - bookingId
+        - amount
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        bookingId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        status:
+          type: string
+          enum:
+            - authorized
+            - captured
+            - failed
+    Money:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+    PaymentMethod:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - card
+            - bank_account
+        last4:
+          type: string
+          minLength: 4
+          maxLength: 4

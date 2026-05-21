@@ -1,0 +1,33 @@
+title: Train Travel API Catalog
+description: Example multi-spec API catalog for train travel services.
+output: ./api-docs
+publish: true
+
+scan:
+  root: ./services
+  include:
+    - "**/*.yaml"
+
+grouping:
+  noiseSegments:
+    - services
+  displayNameOverrides:
+    - pattern: "stations/**"
+      value: Stations API
+    - pattern: "trips/**"
+      value: Trips API
+    - pattern: "bookings/**"
+      value: Bookings API
+    - pattern: "payments/**"
+      value: Payments API
+
+build:
+  mode: full
+  maxPools: 3
+  workersPerPool: 1
+
+footer:
+  enabled: true
+  url: https://pb33f.io/printing-press/
+  linkTitle: Printing Press
+  content: Generated with Printing Press.

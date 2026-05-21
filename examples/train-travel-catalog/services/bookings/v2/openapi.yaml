@@ -1,0 +1,128 @@
+openapi: 3.1.0
+info:
+  title: Bookings API
+  summary: Create and manage passenger bookings with seat selection.
+  description: |
+    Version 2 of the Bookings API adds seat preferences and richer booking
+    links while keeping the customer-facing booking lifecycle simple.
+  version: v2
+  contact:
+    name: Train Travel Platform
+    email: platform@example.com
+servers:
+  - url: https://api.example.com/bookings/v2
+    description: Production
+tags:
+  - name: Bookings
+    description: Customer booking lifecycle endpoints.
+paths:
+  /bookings:
+    post:
+      operationId: createBookingV2
+      summary: Create a booking
+      tags:
+        - Bookings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          description: Booking created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+  /bookings/{bookingId}:
+    get:
+      operationId: getBookingV2
+      summary: Get a booking
+      tags:
+        - Bookings
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Booking details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+components:
+  parameters:
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateBookingRequest:
+      type: object
+      required:
+        - tripId
+        - passenger
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        passenger:
+          $ref: '#/components/schemas/Passenger'
+        seatPreference:
+          $ref: '#/components/schemas/SeatPreference'
+    Booking:
+      type: object
+      required:
+        - id
+        - tripId
+        - passenger
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        passenger:
+          $ref: '#/components/schemas/Passenger'
+        status:
+          type: string
+          enum:
+            - pending
+            - confirmed
+            - cancelled
+        links:
+          $ref: '#/components/schemas/BookingLinks'
+    Passenger:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+    SeatPreference:
+      type: object
+      properties:
+        carriage:
+          type: string
+        seat:
+          type: string
+        quietCoach:
+          type: boolean
+    BookingLinks:
+      type: object
+      properties:
+        payment:
+          type: string
+          format: uri
+        cancellation:
+          type: string
+          format: uri
