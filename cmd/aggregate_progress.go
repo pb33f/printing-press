@@ -20,6 +20,7 @@ import (
 
 type aggregatePoolRenderer interface {
 	report(update printingpress.AggregateProgressUpdate)
+	reportRuntimeMetrics(snapshot runtimeMetricsSnapshot)
 	Close()
 }
 
@@ -38,6 +39,10 @@ type aggregatePoolUpdateMsg struct {
 	update printingpress.AggregateProgressUpdate
 }
 
+type aggregateRuntimeMetricsMsg struct {
+	snapshot runtimeMetricsSnapshot
+}
+
 type aggregatePoolQuitMsg struct{}
 
 type aggregatePoolModel struct {
@@ -50,6 +55,7 @@ type aggregatePoolModel struct {
 	mutedStyle lipgloss.Style
 	pools      map[int]aggregatePoolView
 	order      []int
+	metrics    *runtimeMetricsSnapshot
 	quitting   bool
 }
 
@@ -136,6 +142,13 @@ func (ui *aggregatePoolProgressUI) report(update printingpress.AggregateProgress
 		return
 	}
 	ui.applyMsg(aggregatePoolUpdateMsg{update: update})
+}
+
+func (ui *aggregatePoolProgressUI) reportRuntimeMetrics(snapshot runtimeMetricsSnapshot) {
+	if !ui.interactive {
+		return
+	}
+	ui.applyMsg(aggregateRuntimeMetricsMsg{snapshot: snapshot})
 }
 
 func (ui *aggregatePoolProgressUI) applyMsg(msg tea.Msg) {
@@ -232,6 +245,10 @@ func (m aggregatePoolModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		pool.errorText = update.Error
 		m.pools[update.PoolID] = pool
 		return m, nil
+	case aggregateRuntimeMetricsMsg:
+		snapshot := msg.snapshot
+		m.metrics = &snapshot
+		return m, nil
 	case aggregatePoolQuitMsg:
 		m.quitting = true
 		return m, tea.Quit
@@ -244,11 +261,15 @@ func (m aggregatePoolModel) View() tea.View {
 		return tea.NewView("")
 	}
 	headline := fmt.Sprintf("%s %s", m.spinner.View(), m.titleStyle.Render("Rendering Specs"))
+	lines := []string{headline}
+	if m.metrics != nil {
+		lines = append(lines, m.mutedStyle.Render(formatRuntimeMetrics(*m.metrics)))
+	}
 	if len(m.order) == 0 {
-		return tea.NewView(headline + "\n" + m.mutedStyle.Render("waiting for render pools"))
+		lines = append(lines, m.mutedStyle.Render("waiting for render pools"))
+		return tea.NewView(strings.Join(lines, "\n"))
 	}
 
-	lines := []string{headline}
 	for _, id := range m.order {
 		pool := m.pools[id]
 		meta := fmt.Sprintf("%d/%d specs · %s/%s", pool.completedSpecs, pool.totalSpecs, humanBytes(pool.completedBytes), humanBytes(pool.totalBytes))
@@ -334,6 +355,13 @@ func (r *aggregatePoolPlainRenderer) report(update printingpress.AggregateProgre
 	fmt.Fprintln(r.writer, formatStatusLine(poolLabel(update), aggregatePoolLogMessage(next)))
 }
 
+func (r *aggregatePoolPlainRenderer) reportRuntimeMetrics(snapshot runtimeMetricsSnapshot) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	fmt.Fprintln(r.writer, formatStatusLine("METRICS", formatRuntimeMetrics(snapshot)))
+}
+
 func (r *aggregatePoolPlainRenderer) Close() {}
 
 func (r *aggregatePoolDebugRenderer) report(update printingpress.AggregateProgressUpdate) {
@@ -373,6 +401,22 @@ func (r *aggregatePoolDebugRenderer) report(update printingpress.AggregateProgre
 		attrs = append(attrs, "error", update.Error)
 	}
 	r.logger.Info("aggregate pool", attrs...)
+}
+
+func (r *aggregatePoolDebugRenderer) reportRuntimeMetrics(snapshot runtimeMetricsSnapshot) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.logger == nil {
+		return
+	}
+	r.logger.Info("aggregate metrics",
+		"elapsed", roundDuration(snapshot.Elapsed).String(),
+		"heap", humanRuntimeBytes(snapshot.HeapAlloc),
+		"reserved", humanRuntimeBytes(snapshot.Sys),
+		"allocated", humanRuntimeBytes(snapshot.TotalAlloc),
+		"collections", snapshot.NumGC,
+		"threads", snapshot.Goroutines,
+	)
 }
 
 func (r *aggregatePoolDebugRenderer) Close() {}

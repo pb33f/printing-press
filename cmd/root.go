@@ -44,33 +44,40 @@ type buildLoggerSession struct {
 }
 
 type rootOptions struct {
-	outputDir               string
-	title                   string
-	catalogTitle            string
-	description             string
-	baseURL                 string
-	basePath                string
-	theme                   string
-	configPath              string
-	buildMode               string
-	maxPools                int
-	workersPerPool          int
-	disableSkippedRendering bool
-	footerURL               string
-	footerLinkTitle         string
-	footerContent           string
-	vacuumReport            string
-	vacuumReportStdin       bool
-	noLogo                  bool
-	noFooter                bool
-	disableExport           bool
-	noHTML                  bool
-	noLLM                   bool
-	noJSON                  bool
-	publish                 bool
-	serve                   bool
-	port                    int
-	debug                   bool
+	outputDir                          string
+	title                              string
+	catalogTitle                       string
+	description                        string
+	baseURL                            string
+	basePath                           string
+	theme                              string
+	configPath                         string
+	buildMode                          string
+	maxPools                           int
+	workersPerPool                     int
+	maxPatternRepeatBudget             int
+	maxGeneratedStringBytes            int
+	maxGeneratedMockBytes              int
+	llmAggregateSpecSizeThresholdBytes int64
+	llmMaxAggregateFileBytes           int64
+	llmGenerateMonoliths               string
+	disableSkippedRendering            bool
+	footerURL                          string
+	footerLinkTitle                    string
+	footerContent                      string
+	vacuumReport                       string
+	vacuumReportStdin                  bool
+	noLogo                             bool
+	noFooter                           bool
+	disableExport                      bool
+	noHTML                             bool
+	noLLM                              bool
+	noJSON                             bool
+	publish                            bool
+	serve                              bool
+	port                               int
+	debug                              bool
+	metrics                            bool
 }
 
 var activityRenderWaitTimeout = 2 * time.Second
@@ -146,6 +153,12 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.buildMode, "build-mode", "", "Aggregate build mode: full, fast, or watch")
 	cmd.Flags().IntVar(&opts.maxPools, "max-pools", 0, "Aggregate max concurrent render pools")
 	cmd.Flags().IntVar(&opts.workersPerPool, "workers-per-pool", 0, "Aggregate core budget per render pool")
+	cmd.Flags().IntVar(&opts.maxPatternRepeatBudget, "max-pattern-repeat-budget", 0, "Maximum regex repeat budget for generated mock strings")
+	cmd.Flags().IntVar(&opts.maxGeneratedStringBytes, "max-generated-string-bytes", 0, "Maximum bytes for each generated mock string")
+	cmd.Flags().IntVar(&opts.maxGeneratedMockBytes, "max-generated-mock-bytes", 0, "Maximum bytes for each serialized generated mock payload")
+	cmd.Flags().Int64Var(&opts.llmAggregateSpecSizeThresholdBytes, "llm-aggregate-spec-size-threshold-bytes", 0, "Root spec byte threshold for generating monolithic LLM aggregate files")
+	cmd.Flags().Int64Var(&opts.llmMaxAggregateFileBytes, "llm-max-aggregate-file-bytes", 0, "Target maximum bytes for each sharded LLM aggregate file")
+	cmd.Flags().StringVar(&opts.llmGenerateMonoliths, "llm-generate-monoliths", "", "LLM monolithic aggregate mode: auto, always, or never")
 	cmd.Flags().BoolVar(&opts.disableSkippedRendering, "disable-skipped-rendering", false, "Hide skipped-render warnings from aggregate catalog pages")
 	cmd.Flags().StringVar(&opts.footerURL, "footer-url", "", "Footer link URL for generated HTML")
 	cmd.Flags().StringVar(&opts.footerLinkTitle, "footer-link-title", "", "Footer link text/title for generated HTML")
@@ -163,6 +176,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.serve, "serve", false, "Serve the rendered output after building")
 	cmd.Flags().IntVar(&opts.port, "port", 9090, "Port to use with --serve")
 	cmd.Flags().BoolVar(&opts.debug, "debug", false, "Disable the progress bar and stream build logs live")
+	cmd.Flags().BoolVar(&opts.metrics, "metrics", false, "Show live aggregate runtime metrics while rendering")
 
 	cmd.SetOut(a.stdout)
 	cmd.SetErr(a.stderr)
@@ -315,16 +329,22 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 
 	footer := buildFooterConfig(opts)
 	pp, err := printingpress.CreatePrintingPressFromBytes(source.specBytes, &printingpress.PrintingPressConfig{
-		Title:            opts.title,
-		BaseURL:          opts.baseURL,
-		BasePath:         source.basePath,
-		SpecPath:         source.specPath,
-		OutputDir:        outputDir,
-		AssetMode:        assetMode,
-		DeveloperMode:    developerMode,
-		ArchiveExportURL: archiveExportURLForServe(opts),
-		LintResults:      lintResults,
-		Footer:           footer,
+		Title:                              opts.title,
+		BaseURL:                            opts.baseURL,
+		BasePath:                           source.basePath,
+		SpecPath:                           source.specPath,
+		OutputDir:                          outputDir,
+		AssetMode:                          assetMode,
+		DeveloperMode:                      developerMode,
+		ArchiveExportURL:                   archiveExportURLForServe(opts),
+		LintResults:                        lintResults,
+		Footer:                             footer,
+		MaxPatternRepeatBudget:             opts.maxPatternRepeatBudget,
+		MaxGeneratedStringBytes:            opts.maxGeneratedStringBytes,
+		MaxGeneratedMockBytes:              opts.maxGeneratedMockBytes,
+		LLMAggregateSpecSizeThresholdBytes: opts.llmAggregateSpecSizeThresholdBytes,
+		LLMMaxAggregateFileBytes:           opts.llmMaxAggregateFileBytes,
+		LLMGenerateMonoliths:               opts.llmGenerateMonoliths,
 	})
 	if err != nil {
 		return &cliError{

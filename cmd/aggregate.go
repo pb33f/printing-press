@@ -61,6 +61,11 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 
 	poolRenderer := newAggregatePoolRenderer(renderMode, a.stderr, palette, loggerSession.logger)
 	defer poolRenderer.Close()
+	var metricsMonitor *runtimeMetricsMonitor
+	if opts.metrics {
+		metricsMonitor = startRuntimeMetricsMonitor(buildStart, runtimeMetricsInterval, poolRenderer.reportRuntimeMetrics)
+		defer metricsMonitor.Close()
+	}
 
 	stats, err := ap.PrintSelectedOutputs(printingpress.AggregateRenderOptions{
 		HTML: !opts.noHTML,
@@ -72,6 +77,9 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 	})
 	if err != nil {
 		return &cliError{message: "aggregate render failed", detail: err.Error()}
+	}
+	if metricsMonitor != nil {
+		metricsMonitor.Close()
 	}
 
 	fileCount, totalBytes, err := scanOutputDir(catalog.OutputDir)
@@ -103,17 +111,23 @@ func buildAggregateConfig(scanRoot, outputDir, assetMode string, opts *rootOptio
 	}
 
 	cfg := &printingpress.AggregatePrintingPressConfig{
-		Title:                   catalogTitle,
-		Description:             opts.description,
-		ScanRoot:                scanRoot,
-		OutputDir:               outputDir,
-		BaseURL:                 opts.baseURL,
-		AssetMode:               assetMode,
-		BuildMode:               opts.buildMode,
-		MaxPools:                opts.maxPools,
-		WorkersPerPool:          opts.workersPerPool,
-		DisableSkippedRendering: opts.disableSkippedRendering,
-		Footer:                  buildFooterConfig(opts),
+		Title:                              catalogTitle,
+		Description:                        opts.description,
+		ScanRoot:                           scanRoot,
+		OutputDir:                          outputDir,
+		BaseURL:                            opts.baseURL,
+		AssetMode:                          assetMode,
+		BuildMode:                          opts.buildMode,
+		MaxPools:                           opts.maxPools,
+		WorkersPerPool:                     opts.workersPerPool,
+		MaxPatternRepeatBudget:             opts.maxPatternRepeatBudget,
+		MaxGeneratedStringBytes:            opts.maxGeneratedStringBytes,
+		MaxGeneratedMockBytes:              opts.maxGeneratedMockBytes,
+		LLMAggregateSpecSizeThresholdBytes: opts.llmAggregateSpecSizeThresholdBytes,
+		LLMMaxAggregateFileBytes:           opts.llmMaxAggregateFileBytes,
+		LLMGenerateMonoliths:               opts.llmGenerateMonoliths,
+		DisableSkippedRendering:            opts.disableSkippedRendering,
+		Footer:                             buildFooterConfig(opts),
 	}
 	if fileConfig == nil {
 		return cfg
