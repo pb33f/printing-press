@@ -1,0 +1,117 @@
+openapi: 3.1.0
+info:
+  title: Stations API
+  summary: Find train stations and platform metadata.
+  description: |
+    The Stations API lets journey planners search for stations, inspect
+    country coverage, and resolve station metadata before building trips.
+  version: v1
+  contact:
+    name: Train Travel Platform
+    email: platform@example.com
+servers:
+  - url: https://api.example.com/stations/v1
+    description: Production
+tags:
+  - name: Stations
+    description: Station search and lookup endpoints.
+paths:
+  /stations:
+    get:
+      operationId: listStations
+      summary: List stations
+      description: Search train stations by country code or free-text query.
+      tags:
+        - Stations
+      parameters:
+        - $ref: '#/components/parameters/CountryCode'
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200':
+          description: Matching stations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Station'
+  /stations/{stationId}:
+    get:
+      operationId: getStation
+      summary: Get a station
+      description: Return one station by identifier.
+      tags:
+        - Stations
+      parameters:
+        - $ref: '#/components/parameters/StationId'
+      responses:
+        '200':
+          description: Station details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Station'
+        '404':
+          description: Station was not found.
+components:
+  parameters:
+    CountryCode:
+      name: country
+      in: query
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 2
+      description: ISO country code filter.
+    SearchQuery:
+      name: q
+      in: query
+      schema:
+        type: string
+      description: Search term for station name or city.
+    StationId:
+      name: stationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Station:
+      type: object
+      required:
+        - id
+        - name
+        - countryCode
+        - timezone
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        countryCode:
+          type: string
+          minLength: 2
+          maxLength: 2
+        timezone:
+          type: string
+        coordinates:
+          $ref: '#/components/schemas/Coordinates'
+    Coordinates:
+      type: object
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double

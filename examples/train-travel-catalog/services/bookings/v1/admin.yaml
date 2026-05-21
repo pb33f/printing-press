@@ -1,0 +1,109 @@
+openapi: 3.1.0
+info:
+  title: Bookings Admin API
+  summary: Operational booking controls for support teams.
+  description: |
+    The Bookings Admin API exposes internal support actions for reviewing,
+    confirming, and cancelling train travel bookings.
+  version: v1
+  contact:
+    name: Train Travel Platform
+    email: platform@example.com
+servers:
+  - url: https://api.example.com/bookings-admin/v1
+    description: Production
+tags:
+  - name: Booking Admin
+    description: Support and operations endpoints.
+paths:
+  /admin/bookings:
+    get:
+      operationId: searchAdminBookings
+      summary: Search bookings
+      tags:
+        - Booking Admin
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - pending
+              - confirmed
+              - cancelled
+      responses:
+        '200':
+          description: Matching bookings.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminBooking'
+  /admin/bookings/{bookingId}/confirm:
+    post:
+      operationId: confirmBooking
+      summary: Confirm a booking
+      tags:
+        - Booking Admin
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Booking confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBooking'
+  /admin/bookings/{bookingId}/cancel:
+    post:
+      operationId: cancelBooking
+      summary: Cancel a booking
+      tags:
+        - Booking Admin
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Booking cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBooking'
+components:
+  parameters:
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    AdminBooking:
+      type: object
+      required:
+        - id
+        - status
+        - audit
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        audit:
+          $ref: '#/components/schemas/AuditMetadata'
+    AuditMetadata:
+      type: object
+      properties:
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time

@@ -1,0 +1,123 @@
+openapi: 3.1.0
+info:
+  title: Bookings API
+  summary: Create and manage passenger bookings.
+  description: |
+    The Bookings API manages the customer-facing booking lifecycle for train
+    trips, including passenger details and booking status.
+  version: v1
+  contact:
+    name: Train Travel Platform
+    email: platform@example.com
+servers:
+  - url: https://api.example.com/bookings/v1
+    description: Production
+tags:
+  - name: Bookings
+    description: Customer booking lifecycle endpoints.
+paths:
+  /bookings:
+    get:
+      operationId: listBookings
+      summary: List bookings
+      tags:
+        - Bookings
+      responses:
+        '200':
+          description: Existing bookings.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Booking'
+    post:
+      operationId: createBooking
+      summary: Create a booking
+      tags:
+        - Bookings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          description: Booking created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+  /bookings/{bookingId}:
+    get:
+      operationId: getBooking
+      summary: Get a booking
+      tags:
+        - Bookings
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Booking details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+components:
+  parameters:
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateBookingRequest:
+      type: object
+      required:
+        - tripId
+        - passenger
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        passenger:
+          $ref: '#/components/schemas/Passenger'
+    Booking:
+      type: object
+      required:
+        - id
+        - tripId
+        - passenger
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        passenger:
+          $ref: '#/components/schemas/Passenger'
+        status:
+          type: string
+          enum:
+            - pending
+            - confirmed
+            - cancelled
+    Passenger:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
