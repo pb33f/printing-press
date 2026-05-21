@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,6 +46,9 @@ func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {
 	assert.Contains(t, stdout.String(), "--build-mode")
 	assert.Contains(t, stdout.String(), "--max-pools")
 	assert.Contains(t, stdout.String(), "--workers-per-pool")
+	assert.Contains(t, stdout.String(), "--max-pattern-repeat-budget")
+	assert.Contains(t, stdout.String(), "--max-generated-string-bytes")
+	assert.Contains(t, stdout.String(), "--max-generated-mock-bytes")
 	assert.Contains(t, stdout.String(), "--disable-skipped-rendering")
 	assert.Contains(t, stdout.String(), "--catalog-title")
 	assert.Contains(t, stdout.String(), "--footer-url")
@@ -54,6 +58,7 @@ func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {
 	assert.Contains(t, stdout.String(), "--disable-export")
 	assert.Contains(t, stdout.String(), "--vacuum-report")
 	assert.Contains(t, stdout.String(), "--stdin")
+	assert.Contains(t, stdout.String(), "--metrics")
 	assert.Contains(t, stdout.String(), "stream build logs live")
 }
 
@@ -454,6 +459,24 @@ func TestBuildAggregateConfig_PropagatesDisableSkippedRendering(t *testing.T) {
 	assert.True(t, cfg.DisableSkippedRendering)
 }
 
+func TestBuildAggregateConfig_PropagatesMockGenerationLimits(t *testing.T) {
+	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, &rootOptions{
+		maxPatternRepeatBudget:             7,
+		maxGeneratedStringBytes:            2048,
+		maxGeneratedMockBytes:              32768,
+		llmAggregateSpecSizeThresholdBytes: 1024,
+		llmMaxAggregateFileBytes:           2048,
+		llmGenerateMonoliths:               "never",
+	}, nil)
+
+	assert.Equal(t, 7, cfg.MaxPatternRepeatBudget)
+	assert.Equal(t, 2048, cfg.MaxGeneratedStringBytes)
+	assert.Equal(t, 32768, cfg.MaxGeneratedMockBytes)
+	assert.Equal(t, int64(1024), cfg.LLMAggregateSpecSizeThresholdBytes)
+	assert.Equal(t, int64(2048), cfg.LLMMaxAggregateFileBytes)
+	assert.Equal(t, "never", cfg.LLMGenerateMonoliths)
+}
+
 func TestBuildAggregateConfig_LoadsDisableSkippedRenderingFromConfig(t *testing.T) {
 	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, &rootOptions{}, &printingPressConfigFile{
 		Build: printingPressBuildConfig{
@@ -462,6 +485,91 @@ func TestBuildAggregateConfig_LoadsDisableSkippedRenderingFromConfig(t *testing.
 	})
 
 	assert.True(t, cfg.DisableSkippedRendering)
+}
+
+func TestBuildAggregateConfig_LoadsMockGenerationLimitsFromConfig(t *testing.T) {
+	app, _, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	opts := &rootOptions{}
+	fileConfig := &printingPressConfigFile{
+		Build: printingPressBuildConfig{
+			MaxPatternRepeatBudget:             9,
+			MaxGeneratedStringBytes:            4096,
+			MaxGeneratedMockBytes:              65536,
+			LLMAggregateSpecSizeThresholdBytes: 8192,
+			LLMMaxAggregateFileBytes:           16384,
+			LLMGenerateMonoliths:               "always",
+		},
+	}
+	applyConfigToRootOptions(cmd, opts, fileConfig)
+
+	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, opts, fileConfig)
+
+	assert.Equal(t, 9, cfg.MaxPatternRepeatBudget)
+	assert.Equal(t, 4096, cfg.MaxGeneratedStringBytes)
+	assert.Equal(t, 65536, cfg.MaxGeneratedMockBytes)
+	assert.Equal(t, int64(8192), cfg.LLMAggregateSpecSizeThresholdBytes)
+	assert.Equal(t, int64(16384), cfg.LLMMaxAggregateFileBytes)
+	assert.Equal(t, "always", cfg.LLMGenerateMonoliths)
+}
+
+func TestBuildAggregateConfig_PreservesZeroValueMockGenerationLimitOverrides(t *testing.T) {
+	app, _, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	require.NoError(t, cmd.Flags().Set("max-pattern-repeat-budget", "0"))
+	require.NoError(t, cmd.Flags().Set("max-generated-string-bytes", "0"))
+	require.NoError(t, cmd.Flags().Set("max-generated-mock-bytes", "0"))
+	require.NoError(t, cmd.Flags().Set("llm-aggregate-spec-size-threshold-bytes", "0"))
+	require.NoError(t, cmd.Flags().Set("llm-max-aggregate-file-bytes", "0"))
+	require.NoError(t, cmd.Flags().Set("llm-generate-monoliths", ""))
+
+	opts := &rootOptions{}
+	fileConfig := &printingPressConfigFile{
+		Build: printingPressBuildConfig{
+			MaxPatternRepeatBudget:             9,
+			MaxGeneratedStringBytes:            4096,
+			MaxGeneratedMockBytes:              65536,
+			LLMAggregateSpecSizeThresholdBytes: 8192,
+			LLMMaxAggregateFileBytes:           16384,
+			LLMGenerateMonoliths:               "always",
+		},
+	}
+	applyConfigToRootOptions(cmd, opts, fileConfig)
+
+	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, opts, fileConfig)
+
+	assert.Zero(t, cfg.MaxPatternRepeatBudget)
+	assert.Zero(t, cfg.MaxGeneratedStringBytes)
+	assert.Zero(t, cfg.MaxGeneratedMockBytes)
+	assert.Zero(t, cfg.LLMAggregateSpecSizeThresholdBytes)
+	assert.Zero(t, cfg.LLMMaxAggregateFileBytes)
+	assert.Empty(t, cfg.LLMGenerateMonoliths)
+}
+
+func TestApplyConfigToRootOptions_LoadsMockGenerationLimitsAndMetrics(t *testing.T) {
+	app, _, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	opts := &rootOptions{}
+
+	applyConfigToRootOptions(cmd, opts, &printingPressConfigFile{
+		Metrics: true,
+		Build: printingPressBuildConfig{
+			MaxPatternRepeatBudget:             11,
+			MaxGeneratedStringBytes:            8192,
+			MaxGeneratedMockBytes:              131072,
+			LLMAggregateSpecSizeThresholdBytes: 262144,
+			LLMMaxAggregateFileBytes:           524288,
+			LLMGenerateMonoliths:               "never",
+		},
+	})
+
+	assert.Equal(t, 11, opts.maxPatternRepeatBudget)
+	assert.Equal(t, 8192, opts.maxGeneratedStringBytes)
+	assert.Equal(t, 131072, opts.maxGeneratedMockBytes)
+	assert.Equal(t, int64(262144), opts.llmAggregateSpecSizeThresholdBytes)
+	assert.Equal(t, int64(524288), opts.llmMaxAggregateFileBytes)
+	assert.Equal(t, "never", opts.llmGenerateMonoliths)
+	assert.True(t, opts.metrics)
 }
 
 func TestRootCommand_NoArgsUsesConfigScanRoot(t *testing.T) {
@@ -642,6 +750,37 @@ func TestRootCommand_AggregateServeUsesRenderedOutput(t *testing.T) {
 	assert.Empty(t, servedBaseURL)
 	assert.FileExists(t, filepath.Join(outputDir, "index.html"))
 	assert.Contains(t, stdout.String(), "serving http://127.0.0.1:9191")
+}
+
+func TestRootCommand_AggregateServeStopsMetricsBeforeServing(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeAggregateSpecFile(t, repoRoot, "services/users/openapi.yaml", "Users API", "v1")
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, _ := newTestApplication(t)
+	metricOutput := &lockedMetricsWriter{}
+	app.stderr = metricOutput
+
+	previousInterval := runtimeMetricsInterval
+	runtimeMetricsInterval = 20 * time.Millisecond
+	t.Cleanup(func() {
+		runtimeMetricsInterval = previousInterval
+	})
+
+	var metricsAtServeStart int
+	var metricsBeforeServeReturn int
+	app.serveFn = func(addr string, opts staticServerOptions) error {
+		metricsAtServeStart = metricOutput.metricsCount()
+		time.Sleep(100 * time.Millisecond)
+		metricsBeforeServeReturn = metricOutput.metricsCount()
+		return nil
+	}
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--metrics", "--serve", "--output", outputDir, repoRoot})
+
+	require.NoError(t, cmd.Execute())
+	assert.Greater(t, metricsAtServeStart, 0)
+	assert.Equal(t, metricsAtServeStart, metricsBeforeServeReturn)
 }
 
 func TestRootCommand_AggregateServeForwardsBaseURL(t *testing.T) {
@@ -1104,6 +1243,25 @@ func newTestApplication(t *testing.T) (*application, *bytes.Buffer, *bytes.Buffe
 	app.stdout = stdout
 	app.stderr = stderr
 	return app, stdout, stderr
+}
+
+type lockedMetricsWriter struct {
+	mu      sync.Mutex
+	buffer  bytes.Buffer
+	metrics int
+}
+
+func (w *lockedMetricsWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.metrics += strings.Count(string(p), "METRICS")
+	return w.buffer.Write(p)
+}
+
+func (w *lockedMetricsWriter) metricsCount() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.metrics
 }
 
 func writeSingleFileSpec(t *testing.T, dir string) string {

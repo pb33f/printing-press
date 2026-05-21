@@ -290,6 +290,18 @@ And skipped-render warning suppression in the generated catalog:
 
 - `--disable-skipped-rendering`
 
+Generated mocks also have bounded work limits:
+
+- `--max-pattern-repeat-budget`
+- `--max-generated-string-bytes`
+- `--max-generated-mock-bytes`
+
+Large catalog LLM output can also be tuned:
+
+- `--llm-aggregate-spec-size-threshold-bytes`
+- `--llm-max-aggregate-file-bytes`
+- `--llm-generate-monoliths`
+
 ## Config file
 
 You can configure the CLI with `printing-press.yaml` or `printing-press.yml`.
@@ -333,6 +345,12 @@ build:
   mode: fast
   maxPools: 3
   workersPerPool: 2
+  maxPatternRepeatBudget: 32
+  maxGeneratedStringBytes: 4096
+  maxGeneratedMockBytes: 65536
+  llmAggregateSpecSizeThresholdBytes: 262144
+  llmMaxAggregateFileBytes: 524288
+  llmGenerateMonoliths: auto
   disableSkippedRendering: true
 
 footer:
@@ -358,6 +376,12 @@ state:
 - `--build-mode`: Aggregate build mode: `full`, `fast`, or `watch`
 - `--max-pools`: Aggregate max concurrent render pools
 - `--workers-per-pool`: Aggregate core budget per render pool
+- `--max-pattern-repeat-budget`: Maximum regex repeat budget for generated mock strings
+- `--max-generated-string-bytes`: Maximum bytes for each generated mock string
+- `--max-generated-mock-bytes`: Maximum bytes for each serialized generated mock payload
+- `--llm-aggregate-spec-size-threshold-bytes`: Root spec byte threshold for generating monolithic LLM aggregate files
+- `--llm-max-aggregate-file-bytes`: Target maximum bytes for each sharded LLM aggregate file
+- `--llm-generate-monoliths`: LLM monolithic aggregate mode: `auto`, `always`, or `never`
 - `--disable-skipped-rendering`: Hide skipped-render warnings from aggregate catalog pages
 - `--footer-url`: Footer link URL for generated HTML
 - `--footer-link-title`: Footer link text/title for generated HTML
@@ -366,6 +390,7 @@ state:
 - `--theme`: Terminal theme: `dark`, `roger`, or `tektronix`
 - `--no-logo`, `-b`: Disable the pb33f banner
 - `--debug`: Disable progress bars and stream build logs live
+- `--metrics`: Show live aggregate runtime metrics while rendering
 - `--no-html`: Skip HTML output
 - `--no-llm`: Skip LLM output
 - `--no-json`: Skip JSON artifact output

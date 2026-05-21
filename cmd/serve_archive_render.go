@@ -80,14 +80,20 @@ func renderServeArchiveDirs(source sourceInput, opts *rootOptions, lintResults [
 
 func renderServeArchiveVariant(source sourceInput, opts *rootOptions, outputDir string, developerMode bool, lintResults []*v3.RuleFunctionResult, footer *ppmodel.FooterConfig, includeLLM bool) error {
 	pp, err := printingpress.CreatePrintingPressFromBytes(source.specBytes, &printingpress.PrintingPressConfig{
-		Title:         opts.title,
-		BasePath:      source.basePath,
-		SpecPath:      source.specPath,
-		OutputDir:     outputDir,
-		AssetMode:     printingpress.HTMLAssetModePortable,
-		DeveloperMode: developerMode,
-		LintResults:   lintResults,
-		Footer:        footer,
+		Title:                              opts.title,
+		BasePath:                           source.basePath,
+		SpecPath:                           source.specPath,
+		OutputDir:                          outputDir,
+		AssetMode:                          printingpress.HTMLAssetModePortable,
+		DeveloperMode:                      developerMode,
+		LintResults:                        lintResults,
+		Footer:                             footer,
+		MaxPatternRepeatBudget:             opts.maxPatternRepeatBudget,
+		MaxGeneratedStringBytes:            opts.maxGeneratedStringBytes,
+		MaxGeneratedMockBytes:              opts.maxGeneratedMockBytes,
+		LLMAggregateSpecSizeThresholdBytes: opts.llmAggregateSpecSizeThresholdBytes,
+		LLMMaxAggregateFileBytes:           opts.llmMaxAggregateFileBytes,
+		LLMGenerateMonoliths:               opts.llmGenerateMonoliths,
 	})
 	if err != nil {
 		return fmt.Errorf("create archive printing press: %w", err)
