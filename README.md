@@ -1,448 +1,135 @@
-![printing-press logo](.github/assets/printing-press-logo.png)
+<p align="center">
+	<img src=".github/assets/printing-press-logo.png" alt="printing-press" height="306px" width="360px"/>
+</p>
 
-# Printing Press
+# printing-press: Agentic-first OpenAPI documentation
+
+![Pipeline](https://github.com/pb33f/printing-press/workflows/CI/badge.svg)
+[![discord](https://img.shields.io/discord/923258363540815912)](https://discord.gg/x7VACVuEGP)
+[![Docs](https://img.shields.io/badge/docs-pb33f.io/printing--press-5fafd7)](https://pb33f.io/printing-press/)
+
+`printing-press` turns OpenAPI contracts into beautiful, fast, portable API documentation for humans **and** agents.
+
+- Works **100% offline**. Open the generated docs straight from disk, zip them, or share them as an archive
+- Publish to **any static host** (GitHub Pages, S3, Netlify, Cloudflare Pages, a CDN)
+- **AI and agent output** built in. `AGENTS.md`, `llms.txt`, per-operation and per-model markdown, plus JSON artifacts
+- **API catalogs** built from directories of OpenAPI specs, with multi-version awareness
+- **Integrated diagnostics** via [vacuum](https://quobix.com/vacuum/) reports rendered inline with the docs
+- **Mermaid / UML class diagrams** auto-generated for complex schemas
 
 ---
+
 > [!WARNING]
 > `printing-press` is currently in preview and is not intended for production use.
+
 ---
 
-OpenAPI documentation that is:
+## Come chat with us
 
-- High Quality
-- Designed for Agents and Humans
-- Beautiful & Clean
-- Detailed & Rich
-- Fast & Offline
-- Instant & Complete
+Need help? Have a question? Want to share your work? [Join our discord](https://discord.gg/x7VACVuEGP) and come say hi!
+
+## Documentation
+
+See all the documentation at https://pb33f.io/printing-press/
+
+- [About printing-press](https://pb33f.io/printing-press/about/)
+- [Quick start](https://pb33f.io/printing-press/quickstart/)
+- [Installing](https://pb33f.io/printing-press/installing/)
+- [Rendering modes](https://pb33f.io/printing-press/rendering-modes/)
+- [Navigation](https://pb33f.io/printing-press/navigation/)
+- [Agentic AI](https://pb33f.io/printing-press/agentic-ai/)
+- [UML & class diagrams](https://pb33f.io/printing-press/uml-diagrams/)
+- [Diagnostics mode](https://pb33f.io/printing-press/diagnostics-mode/)
+- [API catalog](https://pb33f.io/printing-press/api-catalog/)
+- [Configuring](https://pb33f.io/printing-press/configuring/)
+- [Generated outputs](https://pb33f.io/printing-press/outputs/)
+
+---
 
 ## Install
 
-Install the latest tagged release binary with the shell installer on macOS or Linux:
+### Install using curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pb33f/printing-press/main/scripts/install_printing_press.sh | sh
+curl -fsSL https://pb33f.io/printing-press/install.sh | sh
 ```
 
-That installs the `ppress` executable.
+For CI environments, set `GITHUB_TOKEN` to avoid GitHub API rate limits:
 
-Install the npm wrapper package:
+```bash
+GITHUB_TOKEN="${GITHUB_TOKEN}" curl -fsSL https://pb33f.io/printing-press/install.sh | sh
+```
+
+### Install using [npm](https://npmjs.com)
 
 ```bash
 npm i -g @pb33f/printing-press
 ```
 
-Use npm on Windows, or download the `windows_x86_64.zip` or `windows_arm64.zip` asset from the GitHub release.
+The npm package is the most convenient install path for Windows. Requires Node `20` or newer.
 
-Install with Homebrew:
+### Install using [Homebrew](https://brew.sh)
 
 ```bash
 brew install pb33f/taps/printing-press
 ```
 
-Both the npm package and the Homebrew cask install the `ppress` executable.
-
-If you prefer `go install`, Go will still name the binary `printing-press` because it derives command names from the module path:
+### Install using Go
 
 ```bash
 go install github.com/pb33f/printing-press@latest
 ```
 
-For CI environments, set `GITHUB_TOKEN` to avoid GitHub API rate limiting:
+Go names the binary `printing-press` because it derives command names from the module path. For every other install method the binary is `ppress`.
 
-```bash
-GITHUB_TOKEN="${GITHUB_TOKEN}" curl -fsSL https://raw.githubusercontent.com/pb33f/printing-press/main/scripts/install_printing_press.sh | sh
-```
-
-Verify the installed release binary:
-
-```bash
-ppress version
-ppress version --verbose
-```
-
-If you installed via `go install`, use `printing-press version` instead.
-
-## Container image
-
-Each tagged release also publishes a container image to GitHub Container Registry:
+### Install using Docker
 
 ```bash
 docker run --rm ghcr.io/pb33f/printing-press:latest version
 ```
 
-To work with local specs and generated docs, bind mount host directories into the container. 
-The image already uses `ppress` as its entrypoint and `/work` as its default working directory, so mounted files behave like local CLI inputs.
-
-Render docs from your current directory:
+Render docs from the current directory:
 
 ```bash
 docker run --rm -v "$PWD:/work" -w /work ghcr.io/pb33f/printing-press:latest ./openapi.yaml
 ```
 
-If you want to keep the input tree read-only and write docs to a separate host directory:
+See the [installing](https://pb33f.io/printing-press/installing/) docs for the full Docker recipes (read-only mounts, serving, port mapping, Linux user mapping).
 
-```bash
-mkdir -p ./api-docs
-docker run --rm \
-  --mount type=bind,src="$PWD",target=/src,readonly \
-  --mount type=bind,src="$PWD/api-docs",target=/out \
-  -w /src \
-  ghcr.io/pb33f/printing-press:latest \
-  --output /out ./openapi.yaml
-```
-
-On Linux, add `--user "$(id -u):$(id -g)"` for bind-mounted runs so the container can read and write host files as your current user instead of hitting permission problems or leaving root-owned output behind:
-
-```bash
-docker run --rm \
-  --user "$(id -u):$(id -g)" \
-  --mount type=bind,src="$PWD",target=/work \
-  -w /work \
-  ghcr.io/pb33f/printing-press:latest \
-  ./openapi.yaml
-```
-
-To serve docs from the container and view them in your browser, publish the container port to the host:
-
-```bash
-docker run --rm \
-  -p 9090:9090 \
-  --mount type=bind,src="$PWD",target=/work \
-  -w /work \
-  ghcr.io/pb33f/printing-press:latest \
-  --serve --port 9090 ./openapi.yaml
-```
-
-Then open `http://127.0.0.1:9090`.
-
-If you want a different host port, change the left side of `-p`. For example, `-p 8080:9090` still runs `ppress` on port `9090` inside the container, but you would visit `http://127.0.0.1:8080` on the host.
-
-Tagged images are also published with the release version, for example `ghcr.io/pb33f/printing-press:<release-version>`.
+---
 
 ## Quick start
 
-Run a single spec:
+### Step 1: Install `ppress`
 
 ```bash
-ppress ./openapi.yaml
+curl -fsSL https://pb33f.io/printing-press/install.sh | sh
 ```
 
-Scan a repo tree and build an API catalog:
+### Step 2: Grab the sample train-travel spec
 
 ```bash
-ppress ./services
+curl -o train-travel.yaml https://api.pb33f.io/bootstrap/train-travel
 ```
 
-By default the output is written to `./api-docs` in your current working directory.
-
-## Build from source
+### Step 3: Print!
 
 ```bash
-go build -o ppress .
-./ppress ./openapi.yaml
+ppress ./train-travel.yaml
 ```
 
-## Usage
+Open `api-docs/index.html` in your browser and you have static, offline OpenAPI docs with no server running.
+
+To preview the **published** (web-hosted) layout locally, use `--serve`:
 
 ```bash
-ppress [flags] <spec-path-or-url>
-ppress [flags] <directory>
+ppress --serve --output ./api-docs ./train-travel.yaml
 ```
 
-Examples:
+Then open http://127.0.0.1:9090.
 
-```bash
-ppress ./openapi.yaml
-ppress --publish --output ./api-docs ./openapi.yaml
-ppress --serve --output ./api-docs ./openapi.yaml
-ppress --debug ./openapi.yaml
-ppress --theme roger ./openapi.yaml
-ppress --vacuum-report ./vacuum-report.json.gz ./openapi.yaml
-vacuum report --stdout ./openapi.yaml | ppress --stdin ./openapi.yaml
-ppress ./services
-ppress --serve ./services
-ppress --build-mode fast ./services
-ppress --disable-skipped-rendering ./services
-```
+> Read the full docs at [https://pb33f.io/printing-press/](https://pb33f.io/printing-press/)
 
-## Single spec vs API catalog
+---
 
-### Single spec
-
-If the input is a file or URL, `printing-press` renders one documentation site.
-
-Example:
-
-```bash
-ppress ./openapi.yaml
-```
-
-Typical outputs:
-
-- `index.html`
-- `operations/*.html`
-- `models/**/*.html`
-- `bundle.json`
-- `llms.txt`
-- `AGENTS.md`
-
-### API catalog
-
-If the input is a directory, `printing-press` scans the tree, discovers root OpenAPI documents, groups them into services and versions, and renders one catalog plus one full doc site per discovered spec entry.
-
-Example monorepo:
-
-```text
-services/
-  banking/specs/banking.yaml
-  auditing/src/things/specs/auditing.yaml
-  users/src/specs/usersv1.yaml
-  users/src/specs/usersv2.yaml
-```
-
-Run:
-
-```bash
-ppress ./services
-```
-
-That produces:
-
-- a root catalog at `api-docs/index.html`
-- grouped service/version docs under `api-docs/services/...`
-- per-entry spec docs under `api-docs/services/<service>/versions/<version>/specs/<entry>/...`
-
-## API catalog LLM outputs
-
-Catalog builds also emit an LLM discovery tree so an agent can start at the top and drill down into the exact spec it wants:
-
-- `api-docs/AGENTS.md`
-- `api-docs/llms.txt`
-- `api-docs/services/<service>/llms.txt`
-- `api-docs/services/<service>/versions/<version>/llms.txt`
-- `api-docs/services/<service>/versions/<version>/specs/<entry>/AGENTS.md`
-- `api-docs/services/<service>/versions/<version>/specs/<entry>/llms.txt`
-
-The intent is:
-
-- root `AGENTS.md` explains the catalog and links to all visible services, versions, and spec-entry indexes
-- root `llms.txt` is the compact catalog index
-- service and version `llms.txt` files progressively narrow the search space
-- each spec entry still carries its own full `AGENTS.md` and `llms.txt`
-
-## Build modes
-
-- default: portable/offline HTML suitable for `file://` use
-- `--publish`: hosted/served HTML asset layout for static hosting, but does not start a server
-- `--serve`: hosted/served HTML asset layout and starts a local preview server
-
-For GitHub Pages, S3, Netlify, Cloudflare Pages, or similar static hosting, use `--publish`.
-When using `--serve`, the local preview includes archive export controls by default. Add `--disable-export` to hide those controls and disable the local export endpoint.
-
-## Outputs
-
-By default, `printing-press` renders:
-
-- HTML documentation
-- JSON artifacts
-- LLM output
-
-You can disable any of these with:
-
-- `--no-html`
-- `--no-json`
-- `--no-llm`
-
-## vacuum report diagnostics
-
-For single-spec builds, `ppress` can import a vacuum sealed report and render the lint results into the generated docs as developer diagnostics. The report should come from the same OpenAPI document that you pass to `ppress`.
-
-Generate a report file with vacuum, then pass it with `--vacuum-report`:
-
-```bash
-vacuum report --compress ./openapi.yaml api-lint
-ppress --vacuum-report ./api-lint-<timestamp>.json.gz ./openapi.yaml
-```
-
-You can also stream the report directly from vacuum into `ppress`. In this mode, `--stdin` reads the vacuum report from standard input; the OpenAPI spec is still the positional argument:
-
-```bash
-vacuum report --stdout ./openapi.yaml | ppress --stdin ./openapi.yaml
-```
-
-vacuum report diagnostics are only supported for single OpenAPI file or URL builds, not directory/catalog builds.
-
-## Aggregate build modes
-
-Directory/catalog builds support:
-
-- `--build-mode full`: rebuild everything
-- `--build-mode fast`: rescan and rebuild changed specs
-- `--build-mode watch`: watch-oriented incremental mode
-
-They also support pool tuning:
-
-- `--max-pools`
-- `--workers-per-pool`
-
-And skipped-render warning suppression in the generated catalog:
-
-- `--disable-skipped-rendering`
-
-Generated mocks also have bounded work limits:
-
-- `--max-pattern-repeat-budget`
-- `--max-generated-string-bytes`
-- `--max-generated-mock-bytes`
-
-Large catalog LLM output can also be tuned:
-
-- `--llm-aggregate-spec-size-threshold-bytes`
-- `--llm-max-aggregate-file-bytes`
-- `--llm-generate-monoliths`
-
-## Config file
-
-You can configure the CLI with `printing-press.yaml` or `printing-press.yml`.
-
-The CLI will look for it:
-
-- next to the input file or directory
-- in the current working directory
-
-CLI flag values take precedence over config file values.
-
-You can also pass it explicitly:
-
-```bash
-ppress --config ./printing-press.yaml ./services
-```
-
-Example:
-
-```yaml
-title: Platform Catalog
-description: Internal API documentation for all services.
-output: ./api-docs
-publish: true
-
-scan:
-  root: ./services
-  ignoreRules:
-    - "**/vendor/**"
-    - "**/testdata/**"
-
-grouping:
-  serviceOverrides:
-    - pattern: "services/payments/**"
-      value: "billing"
-  displayNameOverrides:
-    - pattern: "services/payments/**"
-      value: "Billing API"
-
-build:
-  mode: fast
-  maxPools: 3
-  workersPerPool: 2
-  maxPatternRepeatBudget: 32
-  maxGeneratedStringBytes: 4096
-  maxGeneratedMockBytes: 65536
-  llmAggregateSpecSizeThresholdBytes: 262144
-  llmMaxAggregateFileBytes: 524288
-  llmGenerateMonoliths: auto
-  disableSkippedRendering: true
-
-footer:
-  enabled: true
-  url: https://example.com/docs
-  linkTitle: Documentation generated by the printing press
-  content: Generated by Platform Docs
-
-state:
-  namespace: platform-catalog
-  sqlite:
-    path: ./.printing-press-state.db
-```
-
-## Important flags
-
-- `--output`, `-o`: Output directory for rendered docs
-- `--config`: Path to a `printing-press.yaml` config file
-- `--title`: Override the API title
-- `--catalog-title`: Override the API catalog title
-- `--base-url`: Base URL to use in generated HTML
-- `--base-path`: Base path for resolving local file references
-- `--build-mode`: Aggregate build mode: `full`, `fast`, or `watch`
-- `--max-pools`: Aggregate max concurrent render pools
-- `--workers-per-pool`: Aggregate core budget per render pool
-- `--max-pattern-repeat-budget`: Maximum regex repeat budget for generated mock strings
-- `--max-generated-string-bytes`: Maximum bytes for each generated mock string
-- `--max-generated-mock-bytes`: Maximum bytes for each serialized generated mock payload
-- `--llm-aggregate-spec-size-threshold-bytes`: Root spec byte threshold for generating monolithic LLM aggregate files
-- `--llm-max-aggregate-file-bytes`: Target maximum bytes for each sharded LLM aggregate file
-- `--llm-generate-monoliths`: LLM monolithic aggregate mode: `auto`, `always`, or `never`
-- `--disable-skipped-rendering`: Hide skipped-render warnings from aggregate catalog pages
-- `--footer-url`: Footer link URL for generated HTML
-- `--footer-link-title`: Footer link text/title for generated HTML
-- `--footer-content`: Footer trailing content text for generated HTML
-- `--no-footer`: Disable the generated HTML footer
-- `--theme`: Terminal theme: `dark`, `roger`, or `tektronix`
-- `--no-logo`, `-b`: Disable the pb33f banner
-- `--debug`: Disable progress bars and stream build logs live
-- `--metrics`: Show live aggregate runtime metrics while rendering
-- `--no-html`: Skip HTML output
-- `--no-llm`: Skip LLM output
-- `--no-json`: Skip JSON artifact output
-- `--vacuum-report`: Path to a vacuum sealed report to render as lint diagnostics
-- `--stdin`, `-i`: Read a vacuum sealed report from standard input for lint diagnostics
-- `--publish`: Build hosted/served HTML assets without starting a local server
-- `--serve`: Serve the rendered output after building
-- `--disable-export`: Disable local preview archive export controls and the `--serve` export endpoint
-- `--port`: Port to use with `--serve`
-
-## Local preview
-
-Preview a single spec:
-
-```bash
-ppress --serve --output ./api-docs ./openapi.yaml
-```
-
-Preview an API catalog:
-
-```bash
-ppress --serve --output ./api-docs ./services
-```
-
-This starts a local preview server at `http://127.0.0.1:9090` by default.
-Use `--disable-export` with `--serve` when you want the preview without the export documentation panel:
-
-```bash
-ppress --serve --disable-export --output ./api-docs ./openapi.yaml
-```
-
-## Static hosting
-
-Single spec:
-
-```bash
-ppress --publish --output ./api-docs ./openapi.yaml
-```
-
-API catalog:
-
-```bash
-ppress --publish --output ./api-docs ./services
-```
-
-This produces the hosted asset layout without starting a local server.
-
-## Debugging builds
-
-```bash
-ppress --debug ./openapi.yaml
-ppress --debug ./services
-```
-
-This disables interactive progress bars and streams styled build, activity, and parser logs live.
+`printing-press` is a product of Princess Beef Heavy Industries, LLC.
