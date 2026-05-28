@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/pb33f/doctor/printingpress"
+	ppconfig "github.com/pb33f/doctor/printingpress/config"
 	ppmodel "github.com/pb33f/doctor/printingpress/model"
 	"github.com/pb33f/doctor/terminal"
 )
 
-func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, palette terminal.Palette, fileConfig *printingPressConfigFile) (err error) {
+func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, palette terminal.Palette, fileConfig *ppconfig.File) (err error) {
 	if opts.noHTML && opts.noLLM && opts.noJSON {
 		return &cliError{
 			message: "all output types are disabled",
@@ -21,15 +22,15 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 	}
 
 	buildStart := time.Now()
-	renderMode := selectActivityRenderMode(a.stderr, opts.debug)
-	loggerSession := a.configureBuildLogger(palette, renderMode)
+	renderMode := terminal.SelectActivityRenderMode(a.stderr, opts.debug)
+	loggerSession := terminal.ConfigureBuildLogger(a.stderr, palette, renderMode)
 	defer func() {
-		loggerSession.finish(err)
+		loggerSession.Finish(err)
 	}()
 
 	a.printBannerIfEnabled(opts, palette)
 
-	scanRenderer := newActivityRenderer(renderMode, a.stderr, palette, 1, loggerSession.logger)
+	scanRenderer := terminal.NewActivityRenderer(renderMode, a.stderr, palette, 1, loggerSession.Logger)
 	defer scanRenderer.Close()
 
 	outputDir, err := normalizeAggregateOutputDir(opts.outputDir)
@@ -59,11 +60,11 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 	}
 	scanRenderer.Close()
 
-	poolRenderer := newAggregatePoolRenderer(renderMode, a.stderr, palette, loggerSession.logger)
+	poolRenderer := terminal.NewAggregatePoolRenderer(renderMode, a.stderr, palette, loggerSession.Logger)
 	defer poolRenderer.Close()
-	var metricsMonitor *runtimeMetricsMonitor
+	var metricsMonitor *terminal.RuntimeMetricsMonitor
 	if opts.metrics {
-		metricsMonitor = startRuntimeMetricsMonitor(buildStart, runtimeMetricsInterval, poolRenderer.reportRuntimeMetrics)
+		metricsMonitor = terminal.StartRuntimeMetricsMonitor(buildStart, terminal.DefaultRuntimeMetricsInterval, poolRenderer.ReportRuntimeMetrics)
 		defer metricsMonitor.Close()
 	}
 
@@ -72,7 +73,7 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 		LLM:  !opts.noLLM,
 		JSON: !opts.noJSON,
 		ProgressReporter: printingpress.AggregateProgressReporterFunc(func(update printingpress.AggregateProgressUpdate) {
-			poolRenderer.report(update)
+			poolRenderer.Report(update)
 		}),
 	})
 	if err != nil {
@@ -82,13 +83,13 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 		metricsMonitor.Close()
 	}
 
-	fileCount, totalBytes, err := scanOutputDir(catalog.OutputDir)
+	fileCount, totalBytes, err := terminal.ScanOutputDir(catalog.OutputDir)
 	if err != nil {
 		return &cliError{message: "unable to scan output directory", detail: err.Error()}
 	}
 
 	poolRenderer.Close()
-	a.printAggregateSummary(palette, catalog, stats, nil, nil, time.Since(buildStart), fileCount, totalBytes)
+	terminal.PrintAggregateSummary(a.stdout, palette, catalog, stats, nil, nil, time.Since(buildStart), fileCount, totalBytes)
 
 	if opts.serve {
 		fmt.Fprintf(a.stdout, "serving http://127.0.0.1:%d from %s\n", opts.port, catalog.OutputDir)
@@ -104,7 +105,7 @@ func (a *application) runAggregateBuild(scanRoot string, opts *rootOptions, pale
 	return nil
 }
 
-func buildAggregateConfig(scanRoot, outputDir, assetMode string, opts *rootOptions, fileConfig *printingPressConfigFile) *printingpress.AggregatePrintingPressConfig {
+func buildAggregateConfig(scanRoot, outputDir, assetMode string, opts *rootOptions, fileConfig *ppconfig.File) *printingpress.AggregatePrintingPressConfig {
 	catalogTitle := opts.title
 	if override := strings.TrimSpace(opts.catalogTitle); override != "" {
 		catalogTitle = override
@@ -153,7 +154,7 @@ func buildAggregateConfig(scanRoot, outputDir, assetMode string, opts *rootOptio
 	return cfg
 }
 
-func toAggregateOverrides(configs []printingPressPathConfig) []printingpress.AggregatePathOverride {
+func toAggregateOverrides(configs []ppconfig.PathOverride) []printingpress.AggregatePathOverride {
 	overrides := make([]printingpress.AggregatePathOverride, 0, len(configs))
 	for _, override := range configs {
 		if override.Pattern == "" || override.Value == "" {
@@ -167,27 +168,27 @@ func toAggregateOverrides(configs []printingPressPathConfig) []printingpress.Agg
 	return overrides
 }
 
-func runAggregateCatalogStage(renderer activityRenderer, ap *printingpress.AggregatePrintingPress) (*ppmodel.CatalogSite, error) {
+func runAggregateCatalogStage(renderer terminal.ActivityRenderer, ap *printingpress.AggregatePrintingPress) (*ppmodel.CatalogSite, error) {
 	start := time.Now()
-	renderer.updateManual("scan", "discovering specs", "running", 0.05, 0, nil)
+	renderer.UpdateManual("scan", "discovering specs", "running", 0.05, 0, nil)
 	catalog, err := ap.PressModel()
 	if err != nil {
-		renderer.updateManual("scan", "spec discovery failed", "failed", 0, time.Since(start), err)
+		renderer.UpdateManual("scan", "spec discovery failed", "failed", 0, time.Since(start), err)
 		return nil, err
 	}
-	renderer.updateManual("scan", fmt.Sprintf("discovered %d services across %d specs", len(catalog.Services), countCatalogSpecs(catalog)), "completed", 1, time.Since(start), nil)
+	renderer.UpdateManual("scan", fmt.Sprintf("discovered %d services across %d specs", len(catalog.Services), countCatalogSpecs(catalog)), "completed", 1, time.Since(start), nil)
 	return catalog, nil
 }
 
-func runAggregateStage(renderer activityRenderer, stage, task string, run func() (*printingpress.AggregatePressStatistics, error)) (*printingpress.AggregatePressStatistics, error) {
+func runAggregateStage(renderer terminal.ActivityRenderer, stage, task string, run func() (*printingpress.AggregatePressStatistics, error)) (*printingpress.AggregatePressStatistics, error) {
 	start := time.Now()
-	renderer.updateManual(stage, task, "running", 0.15, 0, nil)
+	renderer.UpdateManual(stage, task, "running", 0.15, 0, nil)
 	stats, err := run()
 	if err != nil {
-		renderer.updateManual(stage, stage+" failed", "failed", 0, time.Since(start), err)
+		renderer.UpdateManual(stage, stage+" failed", "failed", 0, time.Since(start), err)
 		return nil, err
 	}
-	renderer.updateManual(stage, stage+" complete", "completed", 1, time.Since(start), nil)
+	renderer.UpdateManual(stage, stage+" complete", "completed", 1, time.Since(start), nil)
 	return stats, nil
 }
 

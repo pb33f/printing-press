@@ -3,16 +3,12 @@ module github.com/pb33f/printing-press
 go 1.26.0
 
 require (
-	charm.land/bubbles/v2 v2.1.0
-	charm.land/bubbletea/v2 v2.0.6
 	charm.land/lipgloss/v2 v2.0.3
 	github.com/daveshanley/vacuum v0.26.4
 	github.com/pb33f/doctor v0.0.67
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.4
-	golang.org/x/term v0.42.0
 )
 
 require (

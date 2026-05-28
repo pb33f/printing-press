@@ -19,11 +19,6 @@
 
 ---
 
-> [!WARNING]
-> `printing-press` is currently in preview and is not intended for production use.
-
----
-
 ## Come chat with us
 
 Need help? Have a question? Want to share your work? [Join our discord](https://discord.gg/x7VACVuEGP) and come say hi!
