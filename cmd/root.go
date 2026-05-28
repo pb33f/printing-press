@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"compress/gzip"
 	"fmt"
 	"image/color"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +13,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/pb33f/doctor/printingpress"
+	ppconfig "github.com/pb33f/doctor/printingpress/config"
 	ppmodel "github.com/pb33f/doctor/printingpress/model"
 	"github.com/pb33f/doctor/terminal"
 	"github.com/spf13/cobra"
@@ -34,13 +33,6 @@ type application struct {
 	stderr     io.Writer
 	httpClient *http.Client
 	serveFn    func(addr string, opts staticServerOptions) error
-}
-
-type buildLoggerSession struct {
-	previous *slog.Logger
-	logger   *slog.Logger
-	handler  *terminal.PrettyHandler
-	buffered bool
 }
 
 type rootOptions struct {
@@ -80,8 +72,6 @@ type rootOptions struct {
 	metrics                            bool
 }
 
-var activityRenderWaitTimeout = 2 * time.Second
-
 type sourceInput struct {
 	specBytes []byte
 	basePath  string
@@ -109,7 +99,7 @@ func (e *cliError) Error() string {
 func Execute(version, commit, date string) {
 	app := newApplication(resolveBuildInfo(version, commit, date))
 	if err := app.newRootCommand().Execute(); err != nil {
-		app.renderCommandError(err, paletteForArgs(os.Args[1:]))
+		app.renderCommandError(err, terminal.PaletteForPrintingPressArgs(os.Args[1:]))
 		os.Exit(1)
 	}
 }
@@ -215,7 +205,7 @@ func (a *application) newVersionCommand() *cobra.Command {
 }
 
 func (a *application) runRoot(cmd *cobra.Command, args []string, opts *rootOptions) error {
-	fileConfig, err := loadPrintingPressConfig(opts.configPath, firstArg(args))
+	fileConfig, err := ppconfig.Load(opts.configPath, firstArg(args))
 	if err != nil {
 		return &cliError{
 			message: "unable to load configuration",
@@ -225,7 +215,7 @@ func (a *application) runRoot(cmd *cobra.Command, args []string, opts *rootOptio
 	}
 	applyConfigToRootOptions(cmd, opts, fileConfig)
 
-	theme, err := parseTheme(opts.theme)
+	theme, err := terminal.ParsePrintingPressTheme(opts.theme)
 	if err != nil {
 		return &cliError{
 			message: "invalid terminal theme",
@@ -258,7 +248,7 @@ func (a *application) runRoot(cmd *cobra.Command, args []string, opts *rootOptio
 	return a.runBuild(inputArg, opts, palette, fileConfig, cmd.InOrStdin())
 }
 
-func (a *application) runBuild(specArg string, opts *rootOptions, palette terminal.Palette, fileConfig *printingPressConfigFile, diagnosticsInput io.Reader) (err error) {
+func (a *application) runBuild(specArg string, opts *rootOptions, palette terminal.Palette, fileConfig *ppconfig.File, diagnosticsInput io.Reader) (err error) {
 	if !isRemoteInput(specArg) {
 		absPath, absErr := filepath.Abs(specArg)
 		if absErr == nil {
@@ -285,15 +275,15 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 	}
 
 	buildStart := time.Now()
-	renderMode := selectActivityRenderMode(a.stderr, opts.debug)
-	loggerSession := a.configureBuildLogger(palette, renderMode)
+	renderMode := terminal.SelectActivityRenderMode(a.stderr, opts.debug)
+	loggerSession := terminal.ConfigureBuildLogger(a.stderr, palette, renderMode)
 	defer func() {
-		loggerSession.finish(err)
+		loggerSession.Finish(err)
 	}()
 
 	a.printBannerIfEnabled(opts, palette)
 
-	renderer := newActivityRenderer(renderMode, a.stderr, palette, buildStageCount(opts), loggerSession.logger)
+	renderer := terminal.NewActivityRenderer(renderMode, a.stderr, palette, buildOutputStageCount(opts, false), loggerSession.Logger)
 	defer renderer.Close()
 
 	source, err := a.loadSource(specArg, opts.basePath)
@@ -358,14 +348,14 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 	var site *ppmodel.Site
 
 	if !opts.noHTML {
-		htmlStats, err = runWithActivity(pp, renderer.renderActivity, pp.PrintHTML)
+		htmlStats, err = terminal.RunWithActivity(pp, renderer, pp.PrintHTML)
 		if err != nil {
 			return &cliError{message: "html render failed", detail: err.Error()}
 		}
 	}
 
 	if !opts.noLLM {
-		llmStats, err = runWithActivity(pp, renderer.renderActivity, pp.PrintLLM)
+		llmStats, err = terminal.RunWithActivity(pp, renderer, pp.PrintLLM)
 		if err != nil {
 			return &cliError{message: "llm render failed", detail: err.Error()}
 		}
@@ -373,7 +363,7 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 
 	if !opts.noJSON {
 		if htmlStats == nil && llmStats == nil {
-			site, err = runWithActivity(pp, renderer.renderActivity, pp.PressModel)
+			site, err = terminal.RunWithActivity(pp, renderer, pp.PressModel)
 			if err != nil {
 				return &cliError{message: "model build failed", detail: err.Error()}
 			}
@@ -384,13 +374,13 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 			}
 		}
 		jsonStart := time.Now()
-		renderer.updateManual("json", "writing json artifacts", "running", 0.2, 0, nil)
+		renderer.UpdateManual("json", "writing json artifacts", "running", 0.2, 0, nil)
 		if err := printingpress.PrintJSONArtifacts(site, ""); err != nil {
-			renderer.updateManual("json", "json artifact write failed", "failed", 0, time.Since(jsonStart), err)
+			renderer.UpdateManual("json", "json artifact write failed", "failed", 0, time.Since(jsonStart), err)
 			return &cliError{message: "json artifact write failed", detail: err.Error()}
 		}
 		jsonDuration := time.Since(jsonStart)
-		renderer.updateManual("json", "json artifacts complete", "completed", 1, jsonDuration, nil)
+		renderer.UpdateManual("json", "json artifacts complete", "completed", 1, jsonDuration, nil)
 	}
 
 	if site == nil {
@@ -400,13 +390,13 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 		}
 	}
 
-	fileCount, totalBytes, err := scanOutputDir(site.OutputDir)
+	fileCount, totalBytes, err := terminal.ScanOutputDir(site.OutputDir)
 	if err != nil {
 		return &cliError{message: "unable to scan output directory", detail: err.Error()}
 	}
 
 	renderer.Close()
-	a.printSummary(palette, site, htmlStats, llmStats, time.Since(buildStart), fileCount, totalBytes)
+	terminal.PrintSummary(a.stdout, palette, site, htmlStats, llmStats, time.Since(buildStart), fileCount, totalBytes)
 
 	if opts.serve {
 		serveOpts := staticServerOptions{
@@ -419,12 +409,12 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 			if err != nil {
 				return &cliError{message: "unable to render served archive export", detail: err.Error()}
 			}
-			defer archiveDirs.cleanup()
+			defer archiveDirs.Cleanup()
 			if archiveDirs != nil {
-				serveOpts.ArchiveDir = archiveDirs.plain
-				serveOpts.DiagnosticsArchiveDir = archiveDirs.diagnostics
-				serveOpts.LLMArchiveDir = archiveDirs.llm
-				serveOpts.DiagnosticsLLMArchiveDir = archiveDirs.diagnosticLLM
+				serveOpts.ArchiveDir = archiveDirs.Plain
+				serveOpts.DiagnosticsArchiveDir = archiveDirs.Diagnostics
+				serveOpts.LLMArchiveDir = archiveDirs.LLM
+				serveOpts.DiagnosticsLLMArchiveDir = archiveDirs.DiagnosticsLLM
 			}
 		}
 		fmt.Fprintf(a.stdout, "serving http://127.0.0.1:%d from %s\n", opts.port, site.OutputDir)
@@ -434,42 +424,6 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 	}
 
 	return nil
-}
-
-func (a *application) configureBuildLogger(palette terminal.Palette, mode activityRenderMode) *buildLoggerSession {
-	buffered := mode == activityRenderModeProgress
-	level := slog.LevelWarn
-	if mode == activityRenderModeDebug {
-		level = slog.LevelDebug
-	}
-	handler := terminal.NewPrettyHandler(&terminal.PrettyHandlerOptions{
-		Level:      level,
-		TimeFormat: terminal.TimeFormatTimeOnly,
-		Writer:     a.stderr,
-		Palette:    &palette,
-		Buffer:     buffered,
-	})
-	previous := slog.Default()
-	logger := slog.New(handler)
-	slog.SetDefault(logger)
-	return &buildLoggerSession{
-		previous: previous,
-		logger:   logger,
-		handler:  handler,
-		buffered: buffered,
-	}
-}
-
-func (s *buildLoggerSession) finish(runErr error) {
-	if s == nil {
-		return
-	}
-	if s.buffered && runErr != nil && s.handler != nil {
-		_ = s.handler.Flush()
-	}
-	if s.previous != nil {
-		slog.SetDefault(s.previous)
-	}
 }
 
 func (a *application) printBannerIfEnabled(opts *rootOptions, palette terminal.Palette) {
@@ -513,35 +467,11 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 }
 
 func parseTheme(raw string) (terminal.ThemeName, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", string(terminal.ThemeDark):
-		return terminal.ThemeDark, nil
-	case "roger", string(terminal.ThemeLight):
-		return terminal.ThemeLight, nil
-	case string(terminal.ThemeTektronix):
-		return terminal.ThemeTektronix, nil
-	default:
-		return "", fmt.Errorf("invalid theme %q: expected dark, roger, or tektronix", raw)
-	}
+	return terminal.ParsePrintingPressTheme(raw)
 }
 
 func paletteForArgs(args []string) terminal.Palette {
-	theme := terminal.ThemeDark
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--theme" && i+1 < len(args):
-			if parsed, err := parseTheme(args[i+1]); err == nil {
-				theme = parsed
-			}
-			i++
-		case strings.HasPrefix(arg, "--theme="):
-			if parsed, err := parseTheme(strings.TrimPrefix(arg, "--theme=")); err == nil {
-				theme = parsed
-			}
-		}
-	}
-	return terminal.PaletteForTheme(theme)
+	return terminal.PaletteForPrintingPressArgs(args)
 }
 
 func buildFooterConfig(opts *rootOptions) *ppmodel.FooterConfig {
@@ -562,6 +492,18 @@ func buildFooterConfig(opts *rootOptions) *ppmodel.FooterConfig {
 	}
 }
 
+func buildOutputStageCount(opts *rootOptions, diagnostics bool) int {
+	if opts == nil {
+		return 1
+	}
+	return terminal.BuildStageCount(terminal.OutputSelection{
+		HTML:        !opts.noHTML,
+		LLM:         !opts.noLLM,
+		JSON:        !opts.noJSON,
+		Diagnostics: diagnostics,
+	})
+}
+
 func firstArg(args []string) string {
 	if len(args) == 0 {
 		return ""
@@ -569,7 +511,7 @@ func firstArg(args []string) string {
 	return args[0]
 }
 
-func resolveBuildInput(args []string, fileConfig *printingPressConfigFile) (string, bool) {
+func resolveBuildInput(args []string, fileConfig *ppconfig.File) (string, bool) {
 	if len(args) > 0 {
 		return args[0], true
 	}
@@ -671,290 +613,6 @@ func normalizeBasePath(basePath string) (string, error) {
 		return "", fmt.Errorf("resolve base path: %w", err)
 	}
 	return abs, nil
-}
-
-func runWithActivity[T any](pp *printingpress.PrintingPress, render func(*printingpress.ActivitySubscription), run func() (T, error)) (T, error) {
-	sub := pp.ActivityStream()
-	done := make(chan struct{})
-	go func() {
-		render(sub)
-		close(done)
-	}()
-	result, err := run()
-	if sub != nil {
-		sub.Close()
-	}
-	select {
-	case <-done:
-	case <-time.After(activityRenderWaitTimeout):
-		slog.Warn("activity renderer did not shut down before timeout", "timeout", roundDuration(activityRenderWaitTimeout).String())
-	}
-	return result, err
-}
-
-func (a *application) renderActivity(sub *printingpress.ActivitySubscription) {
-	if sub == nil {
-		return
-	}
-	printed := false
-	lastLen := 0
-	for update := range sub.Updates() {
-		line := formatActivity(update)
-		if line == "" {
-			continue
-		}
-		padding := ""
-		if diff := lastLen - len(line); diff > 0 {
-			padding = strings.Repeat(" ", diff)
-		}
-		fmt.Fprintf(a.stderr, "\r%s%s", line, padding)
-		printed = true
-		lastLen = len(line)
-	}
-	if printed {
-		fmt.Fprintln(a.stderr)
-	}
-}
-
-func formatActivity(update printingpress.ActivityUpdate) string {
-	label := strings.ToUpper(update.JobType)
-	if label == "" {
-		label = "WORK"
-	}
-
-	switch update.Status {
-	case "completed":
-		return fmt.Sprintf("[%s] completed in %s", label, roundDuration(update.Elapsed))
-	case "failed":
-		if update.Error != "" {
-			return fmt.Sprintf("[%s] failed: %s", label, update.Error)
-		}
-		return fmt.Sprintf("[%s] failed", label)
-	default:
-		if update.TotalTasks > 0 {
-			return fmt.Sprintf("[%s] %s (%d/%d %.0f%%)", label, update.CurrentTask, update.CompletedTasks, update.TotalTasks, update.PercentComplete)
-		}
-		return fmt.Sprintf("[%s] %s", label, update.CurrentTask)
-	}
-}
-
-func formatStatusLine(label, message string) string {
-	return fmt.Sprintf("[%s] %s", strings.ToUpper(label), message)
-}
-
-func roundDuration(d time.Duration) time.Duration {
-	if d < time.Millisecond {
-		return d
-	}
-	return d.Round(time.Millisecond)
-}
-
-func countModels(site *ppmodel.Site) int {
-	total := 0
-	for _, pages := range site.Models {
-		total += len(pages)
-	}
-	return total
-}
-
-func scanOutputDir(root string) (int, int64, error) {
-	var files int
-	var totalBytes int64
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		files++
-		totalBytes += info.Size()
-		return nil
-	})
-	if err != nil {
-		return 0, 0, fmt.Errorf("scan output directory: %w", err)
-	}
-	return files, totalBytes, nil
-}
-
-func humanBytes(size int64) string {
-	const unit = 1024
-	if size < unit {
-		return fmt.Sprintf("%d B", size)
-	}
-	div, exp := int64(unit), 0
-	for n := size / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB", float64(size)/float64(div), "KMGTPE"[exp])
-}
-
-func serveOutputDir(addr string, opts staticServerOptions) error {
-	return http.ListenAndServe(addr, newStaticServerWithOptions(opts))
-}
-
-func newStaticServer(dir, baseURL string) http.Handler {
-	return newStaticServerWithOptions(staticServerOptions{
-		Dir:     dir,
-		BaseURL: baseURL,
-	})
-}
-
-func newStaticServerWithOptions(opts staticServerOptions) http.Handler {
-	fileServer := newStaticFileServer(opts.Dir)
-	var exportHandler http.Handler
-	if !opts.DisableExport {
-		exportHandler = newStaticExportHandler(opts)
-	}
-	mountPath := resolveServeMountPath(opts.BaseURL)
-	if mountPath == "/" {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == serveArchiveExportEndpoint {
-				if exportHandler != nil {
-					exportHandler.ServeHTTP(w, r)
-					return
-				}
-				http.NotFound(w, r)
-				return
-			}
-			fileServer.ServeHTTP(w, r)
-		})
-	}
-
-	mountPrefix := strings.TrimSuffix(mountPath, "/")
-	mountedFileServer := http.StripPrefix(mountPrefix, fileServer)
-	mountedExportPath := mountPrefix + serveArchiveExportEndpoint
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/":
-			http.Redirect(w, r, mountPath, http.StatusTemporaryRedirect)
-			return
-		case mountPrefix:
-			http.Redirect(w, r, mountPath, http.StatusTemporaryRedirect)
-			return
-		case mountedExportPath:
-			if exportHandler != nil {
-				exportHandler.ServeHTTP(w, r)
-				return
-			}
-			http.NotFound(w, r)
-			return
-		}
-		if !strings.HasPrefix(r.URL.Path, mountPath) {
-			http.NotFound(w, r)
-			return
-		}
-		mountedFileServer.ServeHTTP(w, r)
-	})
-}
-
-func newStaticFileServer(dir string) http.Handler {
-	fileServer := http.FileServer(http.Dir(dir))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestPath := r.URL.Path
-		applyServeCacheHeaders(w.Header(), requestPath)
-		if !shouldGzipResponse(r) || !isCompressibleAsset(requestPath) {
-			fileServer.ServeHTTP(w, r)
-			return
-		}
-
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Add("Vary", "Accept-Encoding")
-		w.Header().Del("Content-Length")
-
-		gzw := gzip.NewWriter(w)
-		defer gzw.Close()
-
-		fileServer.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, writer: gzw}, r)
-	})
-}
-
-func resolveServeMountPath(baseURL string) string {
-	if baseURL == "" {
-		return "/"
-	}
-
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return "/"
-	}
-
-	path := parsed.Path
-	if path == "" {
-		return "/"
-	}
-	if !strings.HasPrefix(path, "/") {
-		return "/"
-	}
-	if path != "/" && !strings.HasSuffix(path, "/") {
-		path += "/"
-	}
-	return path
-}
-
-type gzipResponseWriter struct {
-	http.ResponseWriter
-	writer io.Writer
-}
-
-func (g *gzipResponseWriter) Write(b []byte) (int, error) {
-	return g.writer.Write(b)
-}
-
-func applyServeCacheHeaders(header http.Header, requestPath string) {
-	switch cachePolicyForPath(requestPath) {
-	case "revalidate":
-		header.Set("Cache-Control", "no-cache")
-	default:
-		header.Set("Cache-Control", "no-store")
-	}
-}
-
-func cachePolicyForPath(requestPath string) string {
-	if requestPath == "" || requestPath == "/" {
-		return "revalidate"
-	}
-	if hasServeStaticPath(requestPath) {
-		return "revalidate"
-	}
-	if strings.EqualFold(filepath.Ext(requestPath), ".html") {
-		return "revalidate"
-	}
-	return "no-store"
-}
-
-// hasServeStaticPath returns true for the two namespaces the SPA navigates
-// against and that change between rebuilds: the renderer's shared static
-// bundle (CSS/JS/fonts/icons under /static/) and the per-spec hydration data
-// (/data/ — page JSON, viz JSON, nav cache). Both should revalidate so a
-// rebuild is picked up without a browser refresh.
-func hasServeStaticPath(requestPath string) bool {
-	return strings.Contains(requestPath, "/static/") ||
-		strings.Contains(requestPath, "/data/")
-}
-
-func shouldGzipResponse(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	if r.Method != http.MethodGet {
-		return false
-	}
-	if r.Header.Get("Range") != "" {
-		return false
-	}
-	return strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
-}
-
-func isCompressibleAsset(requestPath string) bool {
-	ext := strings.ToLower(filepath.Ext(requestPath))
-	switch ext {
-	case "", ".html", ".css", ".js", ".json", ".svg", ".txt", ".xml", ".map", ".md", ".markdown", ".yaml", ".yml":
-		return true
-	default:
-		return false
-	}
 }
 
 func (a *application) renderCommandError(err error, palette terminal.Palette) {

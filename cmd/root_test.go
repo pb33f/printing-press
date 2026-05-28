@@ -1,14 +1,8 @@
 package cmd
 
 import (
-	"archive/tar"
-	"archive/zip"
 	"bytes"
-	"compress/gzip"
-	"errors"
 	"fmt"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pb33f/doctor/printingpress"
+	ppconfig "github.com/pb33f/doctor/printingpress/config"
 	"github.com/pb33f/doctor/terminal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -478,8 +473,8 @@ func TestBuildAggregateConfig_PropagatesMockGenerationLimits(t *testing.T) {
 }
 
 func TestBuildAggregateConfig_LoadsDisableSkippedRenderingFromConfig(t *testing.T) {
-	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, &rootOptions{}, &printingPressConfigFile{
-		Build: printingPressBuildConfig{
+	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, &rootOptions{}, &ppconfig.File{
+		Build: ppconfig.BuildConfig{
 			DisableSkippedRendering: true,
 		},
 	})
@@ -491,8 +486,8 @@ func TestBuildAggregateConfig_LoadsMockGenerationLimitsFromConfig(t *testing.T) 
 	app, _, _ := newTestApplication(t)
 	cmd := app.newRootCommand()
 	opts := &rootOptions{}
-	fileConfig := &printingPressConfigFile{
-		Build: printingPressBuildConfig{
+	fileConfig := &ppconfig.File{
+		Build: ppconfig.BuildConfig{
 			MaxPatternRepeatBudget:             9,
 			MaxGeneratedStringBytes:            4096,
 			MaxGeneratedMockBytes:              65536,
@@ -524,8 +519,8 @@ func TestBuildAggregateConfig_PreservesZeroValueMockGenerationLimitOverrides(t *
 	require.NoError(t, cmd.Flags().Set("llm-generate-monoliths", ""))
 
 	opts := &rootOptions{}
-	fileConfig := &printingPressConfigFile{
-		Build: printingPressBuildConfig{
+	fileConfig := &ppconfig.File{
+		Build: ppconfig.BuildConfig{
 			MaxPatternRepeatBudget:             9,
 			MaxGeneratedStringBytes:            4096,
 			MaxGeneratedMockBytes:              65536,
@@ -551,9 +546,9 @@ func TestApplyConfigToRootOptions_LoadsMockGenerationLimitsAndMetrics(t *testing
 	cmd := app.newRootCommand()
 	opts := &rootOptions{}
 
-	applyConfigToRootOptions(cmd, opts, &printingPressConfigFile{
+	applyConfigToRootOptions(cmd, opts, &ppconfig.File{
 		Metrics: true,
-		Build: printingPressBuildConfig{
+		Build: ppconfig.BuildConfig{
 			MaxPatternRepeatBudget:             11,
 			MaxGeneratedStringBytes:            8192,
 			MaxGeneratedMockBytes:              131072,
@@ -760,10 +755,10 @@ func TestRootCommand_AggregateServeStopsMetricsBeforeServing(t *testing.T) {
 	metricOutput := &lockedMetricsWriter{}
 	app.stderr = metricOutput
 
-	previousInterval := runtimeMetricsInterval
-	runtimeMetricsInterval = 20 * time.Millisecond
+	previousInterval := terminal.DefaultRuntimeMetricsInterval
+	terminal.DefaultRuntimeMetricsInterval = 20 * time.Millisecond
 	t.Cleanup(func() {
-		runtimeMetricsInterval = previousInterval
+		terminal.DefaultRuntimeMetricsInterval = previousInterval
 	})
 
 	var metricsAtServeStart int
@@ -855,373 +850,9 @@ func TestRootCommand_InvalidInputPathFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "read spec")
 }
 
-func TestStaticServer_CompressesJavaScriptAndSetsLongCache(t *testing.T) {
-	dir := t.TempDir()
-	staticDir := filepath.Join(dir, "static")
-	require.NoError(t, os.MkdirAll(staticDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(staticDir, "printing-press.js"), []byte("console.log('burger');"), 0o644))
-
-	server := httptest.NewServer(newStaticServer(dir, ""))
-	defer server.Close()
-
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/static/printing-press.js", nil)
-	require.NoError(t, err)
-	req.Header.Set("Accept-Encoding", "gzip")
-
-	resp, err := server.Client().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"))
-	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
-	assert.Contains(t, resp.Header.Values("Vary"), "Accept-Encoding")
-
-	gzr, err := gzip.NewReader(resp.Body)
-	require.NoError(t, err)
-	defer gzr.Close()
-
-	body, err := io.ReadAll(gzr)
-	require.NoError(t, err)
-	assert.Equal(t, "console.log('burger');", string(body))
-}
-
-func TestStaticServer_UsesRevalidatingCacheForHTMLAndPageData(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>burger</title>"), 0o644))
-	pageDataDir := filepath.Join(dir, "data", "pages", "models")
-	require.NoError(t, os.MkdirAll(pageDataDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(pageDataDir, "burger.json"), []byte(`{"ok":true}`), 0o644))
-
-	server := httptest.NewServer(newStaticServer(dir, ""))
-	defer server.Close()
-
-	htmlResp, err := server.Client().Get(server.URL + "/index.html")
-	require.NoError(t, err)
-	defer htmlResp.Body.Close()
-	assert.Equal(t, "no-cache", htmlResp.Header.Get("Cache-Control"))
-
-	dataResp, err := server.Client().Get(server.URL + "/data/pages/models/burger.json")
-	require.NoError(t, err)
-	defer dataResp.Body.Close()
-	assert.Equal(t, "no-cache", dataResp.Header.Get("Cache-Control"))
-}
-
-func TestStaticServer_MountsUnderBasePath(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>burger</title>"), 0o644))
-	staticDir := filepath.Join(dir, "static")
-	require.NoError(t, os.MkdirAll(staticDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(staticDir, "printing-press.css"), []byte("body{}"), 0o644))
-
-	server := httptest.NewServer(newStaticServer(dir, "/docs/"))
-	defer server.Close()
-
-	redirectClient := *server.Client()
-	redirectClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
-	rootResp, err := redirectClient.Get(server.URL + "/")
-	require.NoError(t, err)
-	defer rootResp.Body.Close()
-	assert.Equal(t, http.StatusTemporaryRedirect, rootResp.StatusCode)
-	assert.Equal(t, "/docs/", rootResp.Header.Get("Location"))
-
-	indexResp, err := server.Client().Get(server.URL + "/docs/index.html")
-	require.NoError(t, err)
-	defer indexResp.Body.Close()
-	assert.Equal(t, http.StatusOK, indexResp.StatusCode)
-
-	cssResp, err := server.Client().Get(server.URL + "/docs/static/printing-press.css")
-	require.NoError(t, err)
-	defer cssResp.Body.Close()
-	assert.Equal(t, http.StatusOK, cssResp.StatusCode)
-
-	notFoundResp, err := server.Client().Get(server.URL + "/index.html")
-	require.NoError(t, err)
-	defer notFoundResp.Body.Close()
-	assert.Equal(t, http.StatusNotFound, notFoundResp.StatusCode)
-}
-
-func TestStaticServer_MountedBasePathUsesRevalidatingCacheForStaticAssets(t *testing.T) {
-	dir := t.TempDir()
-	staticDir := filepath.Join(dir, "static")
-	require.NoError(t, os.MkdirAll(staticDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(staticDir, "printing-press.css"), []byte("body{}"), 0o644))
-
-	server := httptest.NewServer(newStaticServer(dir, "/docs/"))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + "/docs/static/printing-press.css")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"))
-}
-
-func TestStaticServer_ServesZipArchiveExport(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>burger</title>"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "diagnostics.html"), []byte("<!doctype html><title>diagnostics</title>"), 0o644))
-
-	server := httptest.NewServer(newStaticServer(dir, ""))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + serveArchiveExportEndpoint)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "application/zip", resp.Header.Get("Content-Type"))
-	assert.Contains(t, resp.Header.Get("Content-Disposition"), "printing-press-docs.zip")
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
-	require.NoError(t, err)
-
-	names := zipArchiveNames(zr)
-	assert.Contains(t, names, "index.html")
-	assert.NotContains(t, names, "diagnostics.html")
-}
-
-func TestStaticServer_ArchiveExportUsesPortableArchiveDir(t *testing.T) {
-	servedDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(servedDir, "index.html"), []byte("served"), 0o644))
-	archiveDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(archiveDir, "index.html"), []byte("portable"), 0o644))
-
-	server := httptest.NewServer(newStaticServerWithOptions(staticServerOptions{
-		Dir:        servedDir,
-		ArchiveDir: archiveDir,
-	}))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + serveArchiveExportEndpoint)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
-	require.NoError(t, err)
-
-	index := zipArchiveFile(t, zr, "index.html")
-	assert.Equal(t, "portable", index)
-}
-
-func TestStaticServer_ServesTarGzArchiveExportWithDiagnostics(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>burger</title>"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "diagnostics.html"), []byte("<!doctype html><title>diagnostics</title>"), 0o644))
-
-	server := httptest.NewServer(newStaticServer(dir, ""))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + serveArchiveExportEndpoint + "?format=tar.gz&diagnostics=true")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "application/gzip", resp.Header.Get("Content-Type"))
-	assert.Contains(t, resp.Header.Get("Content-Disposition"), "printing-press-docs.tar.gz")
-
-	names := tarGzArchiveNames(t, resp.Body)
-	assert.Contains(t, names, "index.html")
-	assert.Contains(t, names, "diagnostics.html")
-}
-
-func TestStaticServer_ArchiveExportIgnoresNumericDiagnosticsSwitch(t *testing.T) {
-	servedDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(servedDir, "index.html"), []byte("served"), 0o644))
-	archiveDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(archiveDir, "index.html"), []byte("portable"), 0o644))
-	diagnosticsDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(diagnosticsDir, "index.html"), []byte("portable"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(diagnosticsDir, "diagnostics.html"), []byte("<!doctype html><title>diagnostics</title>"), 0o644))
-	llmArchiveDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(llmArchiveDir, "index.html"), []byte("portable"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(llmArchiveDir, "llms.txt"), []byte("llm docs"), 0o644))
-
-	server := httptest.NewServer(newStaticServerWithOptions(staticServerOptions{
-		Dir:                   servedDir,
-		ArchiveDir:            archiveDir,
-		DiagnosticsArchiveDir: diagnosticsDir,
-		LLMArchiveDir:         llmArchiveDir,
-	}))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + serveArchiveExportEndpoint + "?diagnostics=1&llm=1")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
-	require.NoError(t, err)
-
-	names := zipArchiveNames(zr)
-	assert.Contains(t, names, "index.html")
-	assert.NotContains(t, names, "diagnostics.html")
-	assert.NotContains(t, names, "llms.txt")
-}
-
-func TestStaticServer_ArchiveExportUsesLLMArchiveDir(t *testing.T) {
-	servedDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(servedDir, "index.html"), []byte("served"), 0o644))
-	archiveDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(archiveDir, "index.html"), []byte("portable"), 0o644))
-	llmArchiveDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(llmArchiveDir, "index.html"), []byte("portable"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(llmArchiveDir, "llms.txt"), []byte("llm docs"), 0o644))
-
-	server := httptest.NewServer(newStaticServerWithOptions(staticServerOptions{
-		Dir:           servedDir,
-		ArchiveDir:    archiveDir,
-		LLMArchiveDir: llmArchiveDir,
-	}))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + serveArchiveExportEndpoint + "?llm=true")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
-	require.NoError(t, err)
-
-	names := zipArchiveNames(zr)
-	assert.Contains(t, names, "index.html")
-	assert.Contains(t, names, "llms.txt")
-}
-
-func TestStaticServer_MountedBasePathServesArchiveExport(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>burger</title>"), 0o644))
-
-	server := httptest.NewServer(newStaticServer(dir, "/docs/"))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + "/docs" + serveArchiveExportEndpoint)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	notFoundResp, err := server.Client().Get(server.URL + serveArchiveExportEndpoint)
-	require.NoError(t, err)
-	defer notFoundResp.Body.Close()
-	assert.Equal(t, http.StatusNotFound, notFoundResp.StatusCode)
-}
-
-func TestStaticServer_DisableExportHidesArchiveEndpoint(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>burger</title>"), 0o644))
-
-	server := httptest.NewServer(newStaticServerWithOptions(staticServerOptions{
-		Dir:           dir,
-		DisableExport: true,
-	}))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + serveArchiveExportEndpoint)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-}
-
-func TestStaticServer_MountedBasePathDisableExportHidesArchiveEndpoint(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>burger</title>"), 0o644))
-
-	server := httptest.NewServer(newStaticServerWithOptions(staticServerOptions{
-		Dir:           dir,
-		BaseURL:       "/docs/",
-		DisableExport: true,
-	}))
-	defer server.Close()
-
-	resp, err := server.Client().Get(server.URL + "/docs" + serveArchiveExportEndpoint)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-}
-
-func TestCachePolicyForPath_TreatsMountedAggregateAssetsAsRevalidating(t *testing.T) {
-	assert.Equal(t, "revalidate", cachePolicyForPath("/docs/static/printing-press.css"))
-	assert.Equal(t, "revalidate", cachePolicyForPath("/docs/services/users/versions/v1/specs/users-api/data/nav.json"))
-	assert.Equal(t, "revalidate", cachePolicyForPath("/docs/services/users/versions/v1/specs/users-api/data/pages/operations/get-user.json"))
-	assert.Equal(t, "revalidate", cachePolicyForPath("/docs/services/users/versions/v1/specs/users-api/index.html"))
-	assert.Equal(t, "no-store", cachePolicyForPath("/docs/services/users/versions/v1/specs/users-api/llms.txt"))
-}
-
-func zipArchiveNames(zr *zip.Reader) []string {
-	names := make([]string, 0, len(zr.File))
-	for _, file := range zr.File {
-		names = append(names, file.Name)
-	}
-	return names
-}
-
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func zipArchiveFile(t *testing.T, zr *zip.Reader, name string) string {
-	t.Helper()
-	for _, file := range zr.File {
-		if file.Name != name {
-			continue
-		}
-		rc, err := file.Open()
-		require.NoError(t, err)
-		defer rc.Close()
-		body, err := io.ReadAll(rc)
-		require.NoError(t, err)
-		return string(body)
-	}
-	t.Fatalf("archive file %q not found", name)
-	return ""
-}
-
-func tarGzArchiveNames(t *testing.T, reader io.Reader) []string {
-	t.Helper()
-	gzr, err := gzip.NewReader(reader)
-	require.NoError(t, err)
-	defer gzr.Close()
-
-	tr := tar.NewReader(gzr)
-	var names []string
-	for {
-		header, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		require.NoError(t, err)
-		names = append(names, header.Name)
-	}
-	return names
-}
-
-func TestStaticServer_CompressesMarkdownAndYAML(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "llms-full.txt"), []byte("docs"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.md"), []byte("# burger"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "openapi.yaml"), []byte("openapi: 3.1.0\n"), 0o644))
-
-	server := httptest.NewServer(newStaticServer(dir, ""))
-	defer server.Close()
-
-	for _, path := range []string{"/notes.md", "/openapi.yaml"} {
-		req, err := http.NewRequest(http.MethodGet, server.URL+path, nil)
-		require.NoError(t, err)
-		req.Header.Set("Accept-Encoding", "gzip")
-
-		resp, err := server.Client().Do(req)
-		require.NoError(t, err)
-		assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
-		resp.Body.Close()
-	}
 }
 
 func TestRootCommand_AllOutputsDisabledFails(t *testing.T) {
@@ -1420,83 +1051,4 @@ func TestRenderCommandError_UsesStyledPrefixAndHint(t *testing.T) {
 	assert.Contains(t, stderr.String(), "boom")
 	assert.Contains(t, stderr.String(), "something exploded")
 	assert.Contains(t, stderr.String(), "try again with one spec")
-}
-
-func TestConfigureBuildLogger_UsesPrettyLogger(t *testing.T) {
-	app, _, stderr := newTestApplication(t)
-	session := app.configureBuildLogger(terminal.PaletteForTheme(terminal.ThemeDark), activityRenderModePlain)
-	defer session.finish(nil)
-
-	slog.Warn("source bundling failed", slog.String("context", "/tmp/spec.yaml"))
-
-	assert.Contains(t, stderr.String(), "source bundling failed")
-	assert.Contains(t, stderr.String(), "context")
-	assert.Contains(t, stderr.String(), "└─")
-}
-
-func TestConfigureBuildLogger_DebugModeStreamsInfoImmediately(t *testing.T) {
-	app, _, stderr := newTestApplication(t)
-	session := app.configureBuildLogger(terminal.PaletteForTheme(terminal.ThemeDark), activityRenderModeDebug)
-	defer session.finish(nil)
-
-	slog.Info("building libopenapi document", slog.String("stage", "HTML"))
-
-	assert.Contains(t, stderr.String(), "building libopenapi document")
-	assert.Contains(t, stderr.String(), "stage")
-	assert.False(t, session.buffered)
-}
-
-func TestBuildLoggerSession_FlushesBufferedLogsOnError(t *testing.T) {
-	var stderr bytes.Buffer
-	handler := terminal.NewPrettyHandler(&terminal.PrettyHandlerOptions{
-		Level:      slog.LevelWarn,
-		TimeFormat: terminal.TimeFormatTimeOnly,
-		Writer:     &stderr,
-		Palette:    ptr(terminal.PaletteForTheme(terminal.ThemeDark)),
-		Buffer:     true,
-	})
-	previous := slog.Default()
-	slog.SetDefault(slog.New(handler))
-
-	slog.Warn("source bundling failed", slog.String("context", "/tmp/spec.yaml"))
-
-	session := &buildLoggerSession{previous: previous, handler: handler, buffered: true}
-	session.finish(errors.New("boom"))
-
-	assert.Contains(t, stderr.String(), "source bundling failed")
-	assert.Contains(t, stderr.String(), "context")
-}
-
-func TestRunWithActivity_TimesOutWhenRendererDoesNotExit(t *testing.T) {
-	pp, err := printingpress.CreatePrintingPressFromBytes([]byte(singleFileSpecYAML), nil)
-	require.NoError(t, err)
-
-	previousTimeout := activityRenderWaitTimeout
-	activityRenderWaitTimeout = 10 * time.Millisecond
-	defer func() {
-		activityRenderWaitTimeout = previousTimeout
-	}()
-
-	release := make(chan struct{})
-	renderDone := make(chan struct{})
-	start := time.Now()
-
-	result, err := runWithActivity(pp, func(sub *printingpress.ActivitySubscription) {
-		defer close(renderDone)
-		<-release
-	}, func() (int, error) {
-		return 42, nil
-	})
-
-	elapsed := time.Since(start)
-	close(release)
-	<-renderDone
-
-	require.NoError(t, err)
-	assert.Equal(t, 42, result)
-	assert.Less(t, elapsed, 80*time.Millisecond)
-}
-
-func ptr[T any](v T) *T {
-	return &v
 }
