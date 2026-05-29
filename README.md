@@ -5,6 +5,7 @@
 # printing-press: Agentic-first OpenAPI documentation
 
 ![Pipeline](https://github.com/pb33f/printing-press/workflows/CI/badge.svg)
+[![Docker Pulls](https://img.shields.io/docker/pulls/pb33f/printing-press?style=flat-square)](https://hub.docker.com/r/pb33f/printing-press)
 [![discord](https://img.shields.io/discord/923258363540815912)](https://discord.gg/x7VACVuEGP)
 [![Docs](https://img.shields.io/badge/docs-pb33f.io/printing--press-5fafd7)](https://pb33f.io/printing-press/)
 
@@ -79,13 +80,17 @@ Go names the binary `printing-press` because it derives command names from the m
 
 ### Install using Docker
 
+Docker images are published to both Docker Hub and GitHub Container Registry:
+
 ```bash
+docker run --rm pb33f/printing-press:latest version
 docker run --rm ghcr.io/pb33f/printing-press:latest version
 ```
 
 Render docs from the current directory:
 
 ```bash
+docker run --rm -v "$PWD:/work" -w /work pb33f/printing-press:latest ./openapi.yaml
 docker run --rm -v "$PWD:/work" -w /work ghcr.io/pb33f/printing-press:latest ./openapi.yaml
 ```
 
