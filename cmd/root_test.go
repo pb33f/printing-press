@@ -609,19 +609,12 @@ func TestRootCommand_ServeUsesRenderedOutput(t *testing.T) {
 	var servedAddr string
 	var servedDir string
 	var servedBaseURL string
-	var archiveDir string
-	var archiveIndexExists bool
-	var archiveUsesPortableHydration bool
-	var llmArchiveExists bool
+	var servedOpts staticServerOptions
 	app.serveFn = func(addr string, opts staticServerOptions) error {
 		servedAddr = addr
 		servedDir = opts.Dir
 		servedBaseURL = opts.BaseURL
-		archiveDir = opts.ArchiveDir
-		archiveIndexExists = fileExists(filepath.Join(opts.ArchiveDir, "index.html"))
-		archiveUsesPortableHydration = fileExists(filepath.Join(opts.ArchiveDir, "data", "nav.js")) &&
-			!fileExists(filepath.Join(opts.ArchiveDir, "data", "nav.json"))
-		llmArchiveExists = fileExists(filepath.Join(opts.LLMArchiveDir, "llms.txt"))
+		servedOpts = opts
 		_, err := os.Stat(filepath.Join(opts.Dir, "index.html"))
 		return err
 	}
@@ -633,15 +626,17 @@ func TestRootCommand_ServeUsesRenderedOutput(t *testing.T) {
 	assert.Equal(t, ":9191", servedAddr)
 	assert.Equal(t, outputDir, servedDir)
 	assert.Empty(t, servedBaseURL)
-	assert.NotEmpty(t, archiveDir)
-	assert.True(t, archiveIndexExists)
-	assert.True(t, archiveUsesPortableHydration)
-	assert.True(t, llmArchiveExists)
+	assert.True(t, servedOpts.DisableExport)
+	assert.Empty(t, servedOpts.ArchiveDir)
+	assert.Empty(t, servedOpts.DiagnosticsArchiveDir)
+	assert.Empty(t, servedOpts.LLMArchiveDir)
+	assert.Empty(t, servedOpts.DiagnosticsLLMArchiveDir)
 	assert.FileExists(t, filepath.Join(outputDir, "data", "nav.json"))
 	assert.NoFileExists(t, filepath.Join(outputDir, "data", "nav.js"))
 	indexBytes, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
 	require.NoError(t, err)
-	assert.Contains(t, string(indexBytes), `data-archive-export-url="/_printing-press/export"`)
+	assert.NotContains(t, string(indexBytes), `data-archive-export-url=`)
+	assert.NotContains(t, string(indexBytes), `<div class="host-archive-controls pp-nav-fallback-archive">`)
 	assert.Contains(t, stdout.String(), "serving http://127.0.0.1:9191")
 }
 
@@ -663,7 +658,7 @@ func TestRootCommand_ServeForwardsBaseURL(t *testing.T) {
 	assert.Equal(t, "/docs/", servedBaseURL)
 	indexBytes, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
 	require.NoError(t, err)
-	assert.Contains(t, string(indexBytes), `data-archive-export-url="/docs/_printing-press/export"`)
+	assert.NotContains(t, string(indexBytes), `data-archive-export-url=`)
 }
 
 func TestRootCommand_ServeDisableExportSkipsArchiveControls(t *testing.T) {

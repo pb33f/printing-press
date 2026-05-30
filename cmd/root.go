@@ -326,7 +326,6 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 		OutputDir:                          outputDir,
 		AssetMode:                          assetMode,
 		DeveloperMode:                      developerMode,
-		ArchiveExportURL:                   archiveExportURLForServe(opts),
 		LintResults:                        lintResults,
 		Footer:                             footer,
 		MaxPatternRepeatBudget:             opts.maxPatternRepeatBudget,
@@ -402,20 +401,7 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 		serveOpts := staticServerOptions{
 			Dir:           site.OutputDir,
 			BaseURL:       site.BaseURL,
-			DisableExport: opts.disableExport,
-		}
-		if !opts.disableExport {
-			archiveDirs, err := renderServeArchiveDirs(*source, opts, lintResults, footer)
-			if err != nil {
-				return &cliError{message: "unable to render served archive export", detail: err.Error()}
-			}
-			defer archiveDirs.Cleanup()
-			if archiveDirs != nil {
-				serveOpts.ArchiveDir = archiveDirs.Plain
-				serveOpts.DiagnosticsArchiveDir = archiveDirs.Diagnostics
-				serveOpts.LLMArchiveDir = archiveDirs.LLM
-				serveOpts.DiagnosticsLLMArchiveDir = archiveDirs.DiagnosticsLLM
-			}
+			DisableExport: true,
 		}
 		fmt.Fprintf(a.stdout, "serving http://127.0.0.1:%d from %s\n", opts.port, site.OutputDir)
 		if err := a.serveFn(fmt.Sprintf(":%d", opts.port), serveOpts); err != nil {
