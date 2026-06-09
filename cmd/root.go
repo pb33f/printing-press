@@ -328,6 +328,7 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 		DeveloperMode:                      developerMode,
 		LintResults:                        lintResults,
 		Footer:                             footer,
+		EnableContentPages:                 true,
 		MaxPatternRepeatBudget:             opts.maxPatternRepeatBudget,
 		MaxGeneratedStringBytes:            opts.maxGeneratedStringBytes,
 		MaxGeneratedMockBytes:              opts.maxGeneratedMockBytes,
