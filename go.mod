@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	charm.land/lipgloss/v2 v2.0.3
 	github.com/daveshanley/vacuum v0.29.2
-	github.com/pb33f/doctor v0.0.74
+	github.com/pb33f/doctor v0.0.75
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.4

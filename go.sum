@@ -112,8 +112,8 @@ github.com/muesli/cancelreader v0.2.2 h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELU
 github.com/muesli/cancelreader v0.2.2/go.mod h1:3XuTXfFS2VjM+HTLZY9Ak0l6eUKfijIfMUZ4EgX0QYo=
 github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdhx/f4=
 github.com/ncruces/go-strftime v0.1.9/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
-github.com/pb33f/doctor v0.0.74 h1:b/yGry6qHXkV7/jUmPUJflVCCYovW0/aGwaUCy3kNzs=
-github.com/pb33f/doctor v0.0.74/go.mod h1:byqDnUZ1tmsrevFn4l/0inwbMXTilRufts0B6+L4oKY=
+github.com/pb33f/doctor v0.0.75 h1:XoorfShHL/2YTHKPb48Aq/+zgzQT2jQymnJcQrjgmpg=
+github.com/pb33f/doctor v0.0.75/go.mod h1:byqDnUZ1tmsrevFn4l/0inwbMXTilRufts0B6+L4oKY=
 github.com/pb33f/jsonpath v0.8.2 h1:Ou4C7zjYClBm97dfZjDCjdZGusJoynv/vrtiEKNfj2Y=
 github.com/pb33f/jsonpath v0.8.2/go.mod h1:zBV5LJW4OQOPatmQE2QdKpGQJvhDTlE5IEj6ASaRNTo=
 github.com/pb33f/libasyncapi v0.0.1 h1:dy0FYKaHBJvxszFYkJ1Wr8n57Ocg0i7r6LjSYTjCtD8=
