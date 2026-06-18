@@ -3,19 +3,19 @@ module github.com/pb33f/printing-press
 go 1.26.0
 
 require (
-	charm.land/lipgloss/v2 v2.0.3
+	charm.land/lipgloss/v2 v2.0.4
 	github.com/daveshanley/vacuum v0.29.2
-	github.com/pb33f/doctor v0.0.75
+	github.com/pb33f/doctor v0.0.78
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	go.yaml.in/yaml/v4 v4.0.0-rc.4
+	go.yaml.in/yaml/v4 v4.0.0-rc.5
 )
 
 require (
 	charm.land/bubbles/v2 v2.1.0 // indirect
 	charm.land/bubbletea/v2 v2.0.7 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
-	github.com/a-h/templ v0.3.1001 // indirect
+	github.com/a-h/templ v0.3.1020 // indirect
 	github.com/alecthomas/chroma/v2 v2.26.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/basgys/goxml2json v1.1.1-0.20231018121955-e66ee54ceaad // indirect
@@ -43,6 +43,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/lucasjones/reggen v0.0.0-20200904144131-37ba4fa293bb // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -51,10 +52,10 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pb33f/jsonpath v0.8.2 // indirect
 	github.com/pb33f/libasyncapi v0.0.1 // indirect
-	github.com/pb33f/libopenapi v0.37.2 // indirect
+	github.com/pb33f/libopenapi v0.38.1 // indirect
 	github.com/pb33f/libopenapi-validator v0.13.8 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -67,13 +68,13 @@ require (
 	github.com/yuin/goldmark v1.8.2 // indirect
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc // indirect
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
-	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.66.10 // indirect
+	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.39.1 // indirect
+	modernc.org/sqlite v1.52.0 // indirect
 )
