@@ -100,6 +100,8 @@ func TestRootCommand_DefaultBuildWritesAllOutputs(t *testing.T) {
 	assert.FileExists(t, filepath.Join(outputDir, "bundle.json"))
 	assert.FileExists(t, filepath.Join(outputDir, "data", "nav.js"))
 	assert.NoFileExists(t, filepath.Join(outputDir, "data", "nav.json"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.js"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.json"))
 	assert.Contains(t, stdout.String(), "Output")
 	assert.Contains(t, stdout.String(), outputDir)
 	assert.Contains(t, stdout.String(), "render complete")
@@ -633,6 +635,8 @@ func TestRootCommand_ServeUsesRenderedOutput(t *testing.T) {
 	assert.Empty(t, servedOpts.DiagnosticsLLMArchiveDir)
 	assert.FileExists(t, filepath.Join(outputDir, "data", "nav.json"))
 	assert.NoFileExists(t, filepath.Join(outputDir, "data", "nav.js"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.json"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.js"))
 	indexBytes, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
 	require.NoError(t, err)
 	assert.NotContains(t, string(indexBytes), `data-archive-export-url=`)
@@ -809,6 +813,8 @@ func TestRootCommand_PublishBuildsServedAssetsWithoutStartingServer(t *testing.T
 	assert.False(t, serverCalled)
 	assert.FileExists(t, filepath.Join(outputDir, "data", "nav.json"))
 	assert.NoFileExists(t, filepath.Join(outputDir, "data", "nav.js"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.json"))
+	assert.NoFileExists(t, filepath.Join(outputDir, "static", "printing-press-shared.js"))
 	assert.NotContains(t, stdout.String(), "serving http://127.0.0.1")
 }
 
