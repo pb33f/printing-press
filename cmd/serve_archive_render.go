@@ -17,6 +17,7 @@ func renderServeArchiveDirs(source sourceInput, opts *rootOptions, lintResults [
 		BasePath:                           source.basePath,
 		SpecPath:                           source.specPath,
 		SpecBytes:                          source.specBytes,
+		IncludeSpec:                        opts.includeSpec,
 		LintResults:                        lintResults,
 		Footer:                             footer,
 		MaxPatternRepeatBudget:             opts.maxPatternRepeatBudget,

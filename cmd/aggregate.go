@@ -128,6 +128,7 @@ func buildAggregateConfig(scanRoot, outputDir, assetMode string, opts *rootOptio
 		LLMMaxAggregateFileBytes:           opts.llmMaxAggregateFileBytes,
 		LLMGenerateMonoliths:               opts.llmGenerateMonoliths,
 		DisableSkippedRendering:            opts.disableSkippedRendering,
+		IncludeSpec:                        opts.includeSpec,
 		Footer:                             buildFooterConfig(opts),
 	}
 	if fileConfig == nil {

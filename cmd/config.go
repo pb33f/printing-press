@@ -32,6 +32,7 @@ func applyConfigToRootOptions(cmd *cobra.Command, opts *rootOptions, fileConfig 
 	applyStringFlag(cmd, "footer-content", &opts.footerContent, fileConfig.Footer.Content)
 	applyBoolFlag(cmd, "no-logo", &opts.noLogo, fileConfig.NoLogo)
 	applyBoolFlag(cmd, "disable-export", &opts.disableExport, fileConfig.DisableExport)
+	applyBoolFlag(cmd, "include-spec", &opts.includeSpec, fileConfig.IncludeSpec)
 	applyBoolFlag(cmd, "no-html", &opts.noHTML, fileConfig.NoHTML)
 	applyBoolFlag(cmd, "no-llm", &opts.noLLM, fileConfig.NoLLM)
 	applyBoolFlag(cmd, "no-json", &opts.noJSON, fileConfig.NoJSON)

@@ -62,6 +62,7 @@ type rootOptions struct {
 	noLogo                             bool
 	noFooter                           bool
 	disableExport                      bool
+	includeSpec                        bool
 	noHTML                             bool
 	noLLM                              bool
 	noJSON                             bool
@@ -124,7 +125,7 @@ func (a *application) newRootCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           commandName,
-		Short:         "Print world class, fast, modern and LLM ready OpenAPI docs with the pb33f printing press",
+		Short:         "Print world class, fast, modern and LLM-ready OpenAPI and AsyncAPI docs with the pb33f printing press",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ArbitraryArgs,
@@ -159,6 +160,7 @@ func (a *application) newRootCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.noLogo, "no-logo", "b", false, "Disable the pb33f banner")
 	cmd.Flags().BoolVar(&opts.noFooter, "no-footer", false, "Disable the generated HTML footer")
 	cmd.Flags().BoolVar(&opts.disableExport, "disable-export", false, "Disable local preview archive export controls")
+	cmd.Flags().BoolVar(&opts.includeSpec, "include-spec", false, "Render and expose the source API contract with linked source locations")
 	cmd.Flags().BoolVar(&opts.noHTML, "no-html", false, "Skip HTML output")
 	cmd.Flags().BoolVar(&opts.noLLM, "no-llm", false, "Skip LLM output")
 	cmd.Flags().BoolVar(&opts.noJSON, "no-json", false, "Skip JSON artifact output")
@@ -228,7 +230,7 @@ func (a *application) runRoot(cmd *cobra.Command, args []string, opts *rootOptio
 	if len(args) > 1 {
 		return &cliError{
 			message: "expected exactly one spec path, directory, or URL",
-			hint:    fmt.Sprintf("Try '%s ./openapi.yaml', '%s ./apis', or '%s --serve ./openapi.yaml'.", commandName, commandName, commandName),
+			hint:    fmt.Sprintf("Try '%s ./openapi.yaml', '%s ./asyncapi.yaml', '%s ./apis', or '%s --serve ./openapi.yaml'.", commandName, commandName, commandName, commandName),
 			detail:  fmt.Sprintf("received %d arguments", len(args)),
 		}
 	}
@@ -290,7 +292,7 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 	if err != nil {
 		return &cliError{
 			message: "unable to load specification input",
-			hint:    "Pass a local OpenAPI file path or an http(s) URL.",
+			hint:    "Pass a local OpenAPI or AsyncAPI file path, or an http(s) URL.",
 			detail:  err.Error(),
 		}
 	}
@@ -328,6 +330,7 @@ func (a *application) runSingleSpecBuild(specArg string, opts *rootOptions, pale
 		DeveloperMode:                      developerMode,
 		LintResults:                        lintResults,
 		Footer:                             footer,
+		IncludeSpec:                        opts.includeSpec,
 		EnableContentPages:                 true,
 		MaxPatternRepeatBudget:             opts.maxPatternRepeatBudget,
 		MaxGeneratedStringBytes:            opts.maxGeneratedStringBytes,
@@ -434,7 +437,7 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	accent := styleWithForeground(palette.Secondary).Bold(true)
 	muted := styleWithForeground(palette.Muted)
 
-	fmt.Fprintln(a.stdout, title.Render(fmt.Sprintf(">> Welcome! To render docs, try '%s ./openapi.yaml'", commandName)))
+	fmt.Fprintln(a.stdout, title.Render(fmt.Sprintf(">> Welcome! Render OpenAPI and AsyncAPI docs with '%s ./openapi.yaml'", commandName)))
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Default outputs:"))
 	fmt.Fprintln(a.stdout, "  > html site")
@@ -443,6 +446,7 @@ func (a *application) printWelcome(opts *rootOptions, palette terminal.Palette) 
 	fmt.Fprintln(a.stdout)
 	fmt.Fprintln(a.stdout, muted.Render("Examples:"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" ./openapi.yaml"))
+	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" ./asyncapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" ./apis"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" --debug ./openapi.yaml"))
 	fmt.Fprintln(a.stdout, "  "+accent.Render(commandName+" --publish --output ./api-docs ./openapi.yaml"))

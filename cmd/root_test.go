@@ -26,8 +26,18 @@ func TestRootCommand_NoArgsShowsWelcome(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	assert.Contains(t, stdout.String(), "https://pb33f.io/printing-press/")
-	assert.Contains(t, stdout.String(), "Welcome! To render docs")
+	assert.Contains(t, stdout.String(), "Render OpenAPI and AsyncAPI docs")
 	assert.Contains(t, stdout.String(), commandName+" ./openapi.yaml")
+	assert.Contains(t, stdout.String(), commandName+" ./asyncapi.yaml")
+}
+
+func TestRootCommand_HelpMentionsOpenAPIAndAsyncAPI(t *testing.T) {
+	app, stdout, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--help"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, stdout.String(), "OpenAPI and AsyncAPI docs")
 }
 
 func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {
@@ -51,6 +61,7 @@ func TestRootCommand_HelpIncludesDebugFlag(t *testing.T) {
 	assert.Contains(t, stdout.String(), "--footer-content")
 	assert.Contains(t, stdout.String(), "--no-footer")
 	assert.Contains(t, stdout.String(), "--disable-export")
+	assert.Contains(t, stdout.String(), "--include-spec")
 	assert.Contains(t, stdout.String(), "--vacuum-report")
 	assert.Contains(t, stdout.String(), "--stdin")
 	assert.Contains(t, stdout.String(), "--metrics")
@@ -365,6 +376,21 @@ func TestRootCommand_DirectoryBuildWritesAggregateOutputs(t *testing.T) {
 	assert.Contains(t, stdout.String(), "specs")
 }
 
+func TestRootCommand_DirectoryBuildIncludeSpecWritesContractAssets(t *testing.T) {
+	repoRoot := writeAggregateRepo(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, _ := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--no-llm", "--no-json", "--include-spec", "--output", outputDir, repoRoot})
+
+	require.NoError(t, cmd.Execute())
+	indexMatches, err := filepath.Glob(filepath.Join(outputDir, "services", "users", "versions", "v2", "specs", "*", "index.html"))
+	require.NoError(t, err)
+	require.Len(t, indexMatches, 1)
+	assert.FileExists(t, filepath.Join(filepath.Dir(indexMatches[0]), "spec", "usersv2.yaml"))
+}
+
 func TestRootCommand_DirectoryBuildDefaultsOutputToWorkingDirectory(t *testing.T) {
 	repoRoot := writeAggregateRepo(t, t.TempDir())
 	workDir := t.TempDir()
@@ -482,6 +508,30 @@ func TestBuildAggregateConfig_LoadsDisableSkippedRenderingFromConfig(t *testing.
 	})
 
 	assert.True(t, cfg.DisableSkippedRendering)
+}
+
+func TestIncludeSpecFlowsFromConfigToAggregate(t *testing.T) {
+	app, _, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	opts := &rootOptions{}
+	fileConfig := &ppconfig.File{IncludeSpec: true}
+
+	applyConfigToRootOptions(cmd, opts, fileConfig)
+	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, opts, fileConfig)
+
+	assert.True(t, opts.includeSpec)
+	assert.True(t, cfg.IncludeSpec)
+}
+
+func TestIncludeSpecConfigCanBeDisabledByFlag(t *testing.T) {
+	app, _, _ := newTestApplication(t)
+	cmd := app.newRootCommand()
+	require.NoError(t, cmd.Flags().Set("include-spec", "false"))
+	opts := &rootOptions{}
+
+	applyConfigToRootOptions(cmd, opts, &ppconfig.File{IncludeSpec: true})
+
+	assert.False(t, opts.includeSpec)
 }
 
 func TestBuildAggregateConfig_LoadsMockGenerationLimitsFromConfig(t *testing.T) {
@@ -663,6 +713,70 @@ func TestRootCommand_ServeForwardsBaseURL(t *testing.T) {
 	indexBytes, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
 	require.NoError(t, err)
 	assert.NotContains(t, string(indexBytes), `data-archive-export-url=`)
+}
+
+func TestRootCommand_IncludeSpecWritesSourceAsset(t *testing.T) {
+	specPath := writeSingleFileSpec(t, t.TempDir())
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, _ := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--no-llm", "--no-json", "--include-spec", "--output", outputDir, specPath})
+
+	require.NoError(t, cmd.Execute())
+	assert.FileExists(t, filepath.Join(outputDir, "spec", filepath.Base(specPath)))
+}
+
+func TestRootCommand_ConfigIncludeSpecWritesSourceAsset(t *testing.T) {
+	projectDir := t.TempDir()
+	specPath := writeSingleFileSpec(t, projectDir)
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "printing-press.yaml"), []byte(`
+output: ./site
+noLLM: true
+noJSON: true
+includeSpec: true
+`), 0o644))
+	app, _, _ := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", specPath})
+
+	require.NoError(t, cmd.Execute())
+	assert.FileExists(t, filepath.Join(projectDir, "site", "spec", filepath.Base(specPath)))
+}
+
+func TestRootCommand_IncludeSpecFlagFalseOverridesConfig(t *testing.T) {
+	projectDir := t.TempDir()
+	specPath := writeSingleFileSpec(t, projectDir)
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "printing-press.yaml"), []byte(`
+output: ./site
+noLLM: true
+noJSON: true
+includeSpec: true
+`), 0o644))
+	app, _, _ := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--include-spec=false", specPath})
+
+	require.NoError(t, cmd.Execute())
+	assert.NoDirExists(t, filepath.Join(projectDir, "site", "spec"))
+}
+
+func TestRootCommand_RendersAsyncAPI(t *testing.T) {
+	projectDir := t.TempDir()
+	specPath := filepath.Join(projectDir, "asyncapi.yaml")
+	require.NoError(t, os.WriteFile(specPath, []byte(asyncAPISpecYAML), 0o644))
+	outputDir := filepath.Join(projectDir, "site")
+	app, _, _ := newTestApplication(t)
+
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{"--no-logo", "--no-llm", "--no-json", "--output", outputDir, specPath})
+
+	require.NoError(t, cmd.Execute())
+	indexBytes, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	require.NoError(t, err)
+	assert.Contains(t, string(indexBytes), "Example Events")
 }
 
 func TestRootCommand_ServeDisableExportSkipsArchiveControls(t *testing.T) {
@@ -976,6 +1090,27 @@ components:
           type: string
         name:
           type: string
+`
+
+const asyncAPISpecYAML = `asyncapi: 3.0.0
+info:
+  title: Example Events
+  version: 1.0.0
+channels:
+  userSignedUp:
+    address: user/signed-up
+    messages:
+      userSignedUp:
+        payload:
+          type: object
+          properties:
+            userId:
+              type: string
+operations:
+  publishUserSignedUp:
+    action: send
+    channel:
+      $ref: '#/channels/userSignedUp'
 `
 
 const sealedVacuumReportJSON = `{

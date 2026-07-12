@@ -2,19 +2,19 @@
 	<img src=".github/assets/printing-press-logo.png" alt="printing-press" height="306px" width="360px"/>
 </p>
 
-# printing-press: Agentic-first OpenAPI documentation
+# printing-press: Agentic-first OpenAPI and AsyncAPI documentation
 
 ![Pipeline](https://github.com/pb33f/printing-press/workflows/CI/badge.svg)
 [![Docker Pulls](https://img.shields.io/docker/pulls/pb33f/printing-press?style=flat-square)](https://hub.docker.com/r/pb33f/printing-press)
 [![discord](https://img.shields.io/discord/923258363540815912)](https://discord.gg/x7VACVuEGP)
 [![Docs](https://img.shields.io/badge/docs-pb33f.io/printing--press-5fafd7)](https://pb33f.io/printing-press/)
 
-`printing-press` turns OpenAPI contracts into beautiful, fast, portable API documentation for humans **and** agents.
+`printing-press` turns OpenAPI and AsyncAPI contracts into beautiful, fast, portable API documentation for humans **and** agents.
 
 - Works **100% offline**. Open the generated docs straight from disk, zip them, or share them as an archive
 - Publish to **any static host** (GitHub Pages, S3, Netlify, Cloudflare Pages, a CDN)
 - **AI and agent output** built in. `AGENTS.md`, `llms.txt`, per-operation and per-model markdown, plus JSON artifacts
-- **API catalogs** built from directories of OpenAPI specs, with multi-version awareness
+- **API catalogs** built from directories of OpenAPI and AsyncAPI specs, with multi-version awareness
 - **Integrated diagnostics** via [vacuum](https://quobix.com/vacuum/) reports rendered inline with the docs
 - **Mermaid / UML class diagrams** auto-generated for complex schemas
 
@@ -118,7 +118,9 @@ curl -o train-travel.yaml https://api.pb33f.io/bootstrap/train-travel
 ppress ./train-travel.yaml
 ```
 
-Open `api-docs/index.html` in your browser and you have static, offline OpenAPI docs with no server running.
+Open `api-docs/index.html` in your browser and you have static, offline OpenAPI or AsyncAPI docs with no server running.
+
+The source API contract is not exposed by default. Set `includeSpec: true` in `printing-press.yaml` or pass `--include-spec` to copy it into the generated site and link source locations. Set `includeSpec: false`, or pass `--include-spec=false` to override an enabled config value, to keep the contract out of the rendered output.
 
 To preview the **published** (web-hosted) layout locally, use `--serve`:
 
