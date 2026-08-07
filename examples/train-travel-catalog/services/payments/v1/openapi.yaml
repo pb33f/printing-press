@@ -6,6 +6,8 @@ info:
     The Payments API collects card payments for bookings and exposes payment
     status for customer support workflows.
   version: v1
+  x-owner:
+    service: payments
   contact:
     name: Train Travel Platform
     email: platform@example.com

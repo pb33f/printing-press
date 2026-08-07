@@ -6,6 +6,8 @@ info:
     The Bookings API manages the customer-facing booking lifecycle for train
     trips, including passenger details and booking status.
   version: v1
+  x-owner:
+    service: bookings
   contact:
     name: Train Travel Platform
     email: platform@example.com

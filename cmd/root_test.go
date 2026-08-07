@@ -465,6 +465,60 @@ footer:
 	assert.NotContains(t, string(indexBytes), "Ignore Me")
 }
 
+func TestRootCommand_TrainTravelExampleGroupsHTTPAndEventContracts(t *testing.T) {
+	configPath, err := filepath.Abs(filepath.Join("..", "examples", "train-travel-catalog", "printing-press.yaml"))
+	require.NoError(t, err)
+	outputDir := filepath.Join(t.TempDir(), "site")
+	app, _, stderr := newTestApplication(t)
+	cmd := app.newRootCommand()
+	cmd.SetArgs([]string{
+		"--config", configPath,
+		"--output", outputDir,
+		"--no-logo",
+		"--no-llm",
+		"--no-json",
+		"--debug",
+	})
+
+	require.NoError(t, cmd.Execute())
+
+	const latestBookingsAPI = "services/bookings/versions/v2/specs/bookings-api/index.html"
+	indexBytes, err := os.ReadFile(filepath.Join(outputDir, "index.html"))
+	require.NoError(t, err)
+	assert.Contains(t, string(indexBytes), `href="`+latestBookingsAPI+`">Bookings API</a>`)
+
+	apiBytes, err := os.ReadFile(filepath.Join(outputDir, filepath.FromSlash(latestBookingsAPI)))
+	require.NoError(t, err)
+	apiHTML := string(apiBytes)
+	assert.Contains(t, apiHTML, "API OVERVIEW")
+	assert.Contains(t, apiHTML, "HTTP API")
+	assert.Contains(t, apiHTML, "Published Events")
+	assert.Contains(t, apiHTML, "Consumed Events")
+
+	for _, relPath := range []string{
+		"services/bookings/versions/v1/specs/bookings-published-events/index.html",
+		"services/bookings/versions/v1/specs/bookings-consumed-events/index.html",
+	} {
+		eventBytes, readErr := os.ReadFile(filepath.Join(outputDir, filepath.FromSlash(relPath)))
+		require.NoError(t, readErr)
+		assert.Contains(t, string(eventBytes), "EVENT OVERVIEW", relPath)
+		assert.Contains(t, string(eventBytes), "HTTP API", relPath)
+		assert.Contains(t, string(eventBytes), "Published Events", relPath)
+		assert.Contains(t, string(eventBytes), "Consumed Events", relPath)
+	}
+
+	serviceEntries, err := os.ReadDir(filepath.Join(outputDir, "services"))
+	require.NoError(t, err)
+	serviceNames := make([]string, 0, len(serviceEntries))
+	for _, entry := range serviceEntries {
+		if entry.IsDir() {
+			serviceNames = append(serviceNames, entry.Name())
+		}
+	}
+	assert.ElementsMatch(t, []string{"bookings", "payments", "stations", "trips"}, serviceNames)
+	assert.NotContains(t, stderr.String(), "configured service identity metadata pointers did not resolve")
+}
+
 func TestBuildAggregateConfig_UsesCatalogTitleFlag(t *testing.T) {
 	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, &rootOptions{
 		title:        "Single API Title",
@@ -508,6 +562,49 @@ func TestBuildAggregateConfig_LoadsDisableSkippedRenderingFromConfig(t *testing.
 	})
 
 	assert.True(t, cfg.DisableSkippedRendering)
+}
+
+func TestBuildAggregateConfig_PropagatesServiceIdentityAndContractRoles(t *testing.T) {
+	fileConfig := &ppconfig.File{
+		Grouping: ppconfig.GroupingConfig{
+			ServiceIdentity: ppconfig.ServiceIdentityConfig{
+				MetadataPointers:           []string{"/info/x-owner/service", "/info/x-service"},
+				StripPrefixes:              []string{"platform-"},
+				StripSuffixes:              []string{"-api"},
+				PreferOpenAPISlug:          true,
+				MetadataOptionalForOpenAPI: true,
+			},
+			ContractRoles: []ppconfig.ContractRoleRule{
+				{Pattern: "**/openapi.yaml", Role: "http-api", ContractID: "http-api", Default: true},
+				{Pattern: "**/events/*.yaml", Role: "not-validated-here", ContractID: "events"},
+			},
+		},
+	}
+
+	cfg := buildAggregateConfig("/tmp/repo", "/tmp/site", printingpress.HTMLAssetModePortable, &rootOptions{}, fileConfig)
+
+	assert.Equal(t, printingpress.AggregateServiceIdentityConfig{
+		MetadataPointers:           []string{"/info/x-owner/service", "/info/x-service"},
+		StripPrefixes:              []string{"platform-"},
+		StripSuffixes:              []string{"-api"},
+		PreferOpenAPISlug:          true,
+		MetadataOptionalForOpenAPI: true,
+	}, cfg.ServiceIdentity)
+	assert.Equal(t, []printingpress.AggregateContractRoleRule{
+		{Pattern: "**/openapi.yaml", Role: "http-api", ContractID: "http-api", Default: true},
+		{Pattern: "**/events/*.yaml", Role: "not-validated-here", ContractID: "events"},
+	}, cfg.ContractRoles)
+
+	fileConfig.Grouping.ServiceIdentity.MetadataPointers[0] = "/changed"
+	fileConfig.Grouping.ServiceIdentity.StripPrefixes[0] = "changed-"
+	fileConfig.Grouping.ServiceIdentity.StripSuffixes[0] = "-changed"
+	fileConfig.Grouping.ServiceIdentity.MetadataOptionalForOpenAPI = false
+	fileConfig.Grouping.ContractRoles[0].Pattern = "changed"
+	assert.Equal(t, "/info/x-owner/service", cfg.ServiceIdentity.MetadataPointers[0])
+	assert.Equal(t, "platform-", cfg.ServiceIdentity.StripPrefixes[0])
+	assert.Equal(t, "-api", cfg.ServiceIdentity.StripSuffixes[0])
+	assert.True(t, cfg.ServiceIdentity.MetadataOptionalForOpenAPI)
+	assert.Equal(t, "**/openapi.yaml", cfg.ContractRoles[0].Pattern)
 }
 
 func TestIncludeSpecFlowsFromConfigToAggregate(t *testing.T) {

@@ -1,0 +1,29 @@
+asyncapi: 3.0.0
+info:
+  title: Bookings Consumed Events
+  summary: Booking events consumed by the booking workflow.
+  version: v1
+  x-owner:
+    service: bookings
+channels:
+  bookingUpdates:
+    address: bookings.updated.v1
+    messages:
+      BookingUpdated:
+        $ref: ../../published/v1/asyncapi.yaml#/components/messages/BookingUpdated
+operations:
+  consumeBookingUpdated:
+    action: receive
+    channel:
+      $ref: '#/channels/bookingUpdates'
+    messages:
+      - $ref: '#/channels/bookingUpdates/messages/BookingUpdated'
+components:
+  messages:
+    BookingReceipt:
+      name: BookingReceipt
+      payload:
+        type: object
+        properties:
+          accepted:
+            type: boolean
