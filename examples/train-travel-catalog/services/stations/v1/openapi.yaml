@@ -6,6 +6,8 @@ info:
     The Stations API lets journey planners search for stations, inspect
     country coverage, and resolve station metadata before building trips.
   version: v1
+  x-owner:
+    service: stations
   contact:
     name: Train Travel Platform
     email: platform@example.com

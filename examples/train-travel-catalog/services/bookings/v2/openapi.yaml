@@ -6,6 +6,8 @@ info:
     Version 2 of the Bookings API adds seat preferences and richer booking
     links while keeping the customer-facing booking lifecycle simple.
   version: v2
+  x-owner:
+    service: bookings
   contact:
     name: Train Travel Platform
     email: platform@example.com

@@ -6,6 +6,8 @@ info:
     The Trips API returns route options, departure times, arrival times, and
     fare estimates for train travel search experiences.
   version: v1
+  x-owner:
+    service: trips
   contact:
     name: Train Travel Platform
     email: platform@example.com

@@ -6,6 +6,8 @@ info:
     The Bookings Admin API exposes internal support actions for reviewing,
     confirming, and cancelling train travel bookings.
   version: v1
+  x-owner:
+    service: bookings
   contact:
     name: Train Travel Platform
     email: platform@example.com

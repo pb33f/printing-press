@@ -141,6 +141,24 @@ func buildAggregateConfig(scanRoot, outputDir, assetMode string, opts *rootOptio
 	cfg.ServiceOverrides = toAggregateOverrides(fileConfig.Grouping.ServiceOverrides)
 	cfg.DisplayNameOverrides = toAggregateOverrides(fileConfig.Grouping.DisplayNameOverrides)
 	cfg.VersionOverrides = toAggregateOverrides(fileConfig.Grouping.VersionOverrides)
+	cfg.ServiceIdentity = printingpress.AggregateServiceIdentityConfig{
+		MetadataPointers:           append([]string(nil), fileConfig.Grouping.ServiceIdentity.MetadataPointers...),
+		StripPrefixes:              append([]string(nil), fileConfig.Grouping.ServiceIdentity.StripPrefixes...),
+		StripSuffixes:              append([]string(nil), fileConfig.Grouping.ServiceIdentity.StripSuffixes...),
+		PreferOpenAPISlug:          fileConfig.Grouping.ServiceIdentity.PreferOpenAPISlug,
+		MetadataOptionalForOpenAPI: fileConfig.Grouping.ServiceIdentity.MetadataOptionalForOpenAPI,
+	}
+	if fileConfig.Grouping.ContractRoles != nil {
+		cfg.ContractRoles = make([]printingpress.AggregateContractRoleRule, len(fileConfig.Grouping.ContractRoles))
+		for i, rule := range fileConfig.Grouping.ContractRoles {
+			cfg.ContractRoles[i] = printingpress.AggregateContractRoleRule{
+				Pattern:    rule.Pattern,
+				Role:       rule.Role,
+				ContractID: rule.ContractID,
+				Default:    rule.Default,
+			}
+		}
+	}
 	cfg.StateNamespace = fileConfig.State.Namespace
 	cfg.StateSQLitePath = fileConfig.State.SQLite.Path
 	if cfg.MaxPools == 0 {

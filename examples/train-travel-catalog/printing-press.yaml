@@ -11,11 +11,33 @@ scan:
 grouping:
   noiseSegments:
     - services
+  serviceIdentity:
+    metadataPointers:
+      - /info/x-owner/service
+    preferOpenAPISlug: true
+  contractRoles:
+    - pattern: "**/openapi.yaml"
+      role: http-api
+      contractID: http-api
+      default: true
+    - pattern: "**/admin.yaml"
+      role: http-api
+      contractID: admin-api
+    - pattern: "**/events/published/**"
+      role: published-events
+      contractID: published-events
+    - pattern: "**/events/consumed/**"
+      role: consumed-events
+      contractID: consumed-events
   displayNameOverrides:
     - pattern: "stations/**"
       value: Stations API
     - pattern: "trips/**"
       value: Trips API
+    - pattern: "bookings/events/published/**"
+      value: Bookings Published Events
+    - pattern: "bookings/events/consumed/**"
+      value: Bookings Consumed Events
     - pattern: "bookings/**"
       value: Bookings API
     - pattern: "payments/**"

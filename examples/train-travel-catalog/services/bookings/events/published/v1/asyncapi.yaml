@@ -1,0 +1,42 @@
+asyncapi: 3.0.0
+info:
+  title: Bookings Published Events
+  summary: Booking lifecycle events published for other train travel services.
+  version: v1
+  x-owner:
+    service: bookings
+channels:
+  bookingUpdates:
+    address: bookings.updated.v1
+    messages:
+      BookingUpdated:
+        $ref: '#/components/messages/BookingUpdated'
+operations:
+  publishBookingUpdated:
+    action: send
+    channel:
+      $ref: '#/channels/bookingUpdates'
+    messages:
+      - $ref: '#/channels/bookingUpdates/messages/BookingUpdated'
+components:
+  messages:
+    BookingUpdated:
+      name: BookingUpdated
+      payload:
+        $ref: '#/components/schemas/BookingEvent'
+  schemas:
+    BookingEvent:
+      type: object
+      required:
+        - bookingId
+        - status
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - pending
+            - confirmed
+            - cancelled
