@@ -15,8 +15,8 @@ import (
 	"github.com/pb33f/doctor/printingpress"
 	ppconfig "github.com/pb33f/doctor/printingpress/config"
 	"github.com/pb33f/doctor/terminal"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/pb33f/testify/assert"
+	"github.com/pb33f/testify/require"
 )
 
 func TestRootCommand_NoArgsShowsWelcome(t *testing.T) {
