@@ -9,7 +9,7 @@ import (
 	"github.com/daveshanley/vacuum/rulesets"
 	vacuumReport "github.com/daveshanley/vacuum/vacuum-report"
 	docv3 "github.com/pb33f/doctor/model/high/v3"
-	"go.yaml.in/yaml/v4"
+	"github.com/pb33f/go-yaml"
 )
 
 func resolveDeveloperDiagnostics(opts *rootOptions, input io.Reader) (bool, []*docv3.RuleFunctionResult, error) {
