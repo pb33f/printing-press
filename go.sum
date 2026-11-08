@@ -140,10 +140,6 @@ github.com/muesli/termenv v0.16.0 h1:S5AlUN9dENB57rsbnkPyfdGuWIlkmzJjbFf0Tf5FWUc
 github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3VfY/Cnk=
 github.com/ncruces/go-strftime v1.1.0 h1:vtPmPWMkb539RGV9WpWT9EwJGvrOCKvMNI4obWL47Hk=
 github.com/ncruces/go-strftime v1.1.0/go.mod h1:yVaq7iwCN09vHRrKBrrflXT0M9tTMG2KmZ9Fj7xeG/g=
-github.com/pb33f/doctor v0.0.87 h1:4PQgjs+sjYDL8VxnUJhZLHDWl0+zYcCgfsVD/m7231c=
-github.com/pb33f/doctor v0.0.87/go.mod h1:9TCfRtf+g+WJArC1jga31KP2fzCggg0W0RrVWryh9Vc=
-github.com/pb33f/doctor v0.0.88-0.20261108153705-34e4ccc4848a h1:Sykc74BC2u9VfhcXSfKcgf2chpmOIUQPlD6NkMALYFU=
-github.com/pb33f/doctor v0.0.88-0.20261108153705-34e4ccc4848a/go.mod h1:9TCfRtf+g+WJArC1jga31KP2fzCggg0W0RrVWryh9Vc=
 github.com/pb33f/doctor v0.0.88-0.20261108155419-066dd4b44623 h1:ooutw4kLo/Rcvzac9vWNX5rFrYh3B+Xo+T0Xbj3by10=
 github.com/pb33f/doctor v0.0.88-0.20261108155419-066dd4b44623/go.mod h1:9TCfRtf+g+WJArC1jga31KP2fzCggg0W0RrVWryh9Vc=
 github.com/pb33f/go-yaml v0.1.1 h1:yWGmhVdwzionRnSc/hEJwcfq6PaZL2QdYzyReXBbX7Q=
@@ -154,12 +150,8 @@ github.com/pb33f/jsonschema/v6 v6.0.3 h1:TMIkE1xCmnF8Cy+anIBs+r4ASfGtwzfFxYsrrIn
 github.com/pb33f/jsonschema/v6 v6.0.3/go.mod h1:cYPShw+w1Jrs0YgpE2rk1FLdIAsKfWcotv/54G6ddFo=
 github.com/pb33f/libasyncapi v0.0.7 h1:0CTUZwjQm4Fya6Znb7q/1kBWvp/92v5CaB9T55zJMiA=
 github.com/pb33f/libasyncapi v0.0.7/go.mod h1:OcM42Lo3J4F9Tz55RZIOxcAubOv1BGRg9gy8Sp36skk=
-github.com/pb33f/libopenapi v0.42.3 h1:0VXnFgz04LtWjIsmCqGYA5E2Mx0DOZcOTjy5KHYw88k=
-github.com/pb33f/libopenapi v0.42.3/go.mod h1:IlfeXtmcY38KEnGJ4OMWFA8I62BCNamuQa8omLnk6R0=
-github.com/pb33f/libopenapi v0.42.5-0.20261108154528-bc7717dacffb h1:8Kl+DmdR8XX3aFgsQks0nZhWAltgKLurT3Whm4ggVCo=
-github.com/pb33f/libopenapi v0.42.5-0.20261108154528-bc7717dacffb/go.mod h1:ap6qfNXmQ55iuXzef+k/3o/1zJOoSLCvL2snqDghVHw=
-github.com/pb33f/libopenapi v0.42.5-0.20261108155746-5e3f2d607172 h1:2NAPoztHOYHOFjhfeUYJUYMRi/ismAOoQcUuYIbyhRI=
-github.com/pb33f/libopenapi v0.42.5-0.20261108155746-5e3f2d607172/go.mod h1:ap6qfNXmQ55iuXzef+k/3o/1zJOoSLCvL2snqDghVHw=
+github.com/pb33f/libopenapi v0.42.5-0.20261108171115-8c2c889ff7ea h1:voGJBii9kAzCbEQ7hOzTVCRUlDbjMcX7P7F8I/hq2Qk=
+github.com/pb33f/libopenapi v0.42.5-0.20261108171115-8c2c889ff7ea/go.mod h1:ap6qfNXmQ55iuXzef+k/3o/1zJOoSLCvL2snqDghVHw=
 github.com/pb33f/libopenapi-validator v0.16.2 h1:DUA5g+F3i0M02RqOH8kuJMY2NcgaK6u7uhLkwWAxEng=
 github.com/pb33f/libopenapi-validator v0.16.2/go.mod h1:6Oi2qisw4J5VjokIZnvOEovf3e8k9ObDzW5+IgYLaQ8=
 github.com/pb33f/ordered-map/v2 v2.3.2 h1:wDyaZ2Pv9QLh64X4utCeD5Zoi9nIv2aW3lwv172O5PQ=
