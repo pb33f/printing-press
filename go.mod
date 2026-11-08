@@ -5,7 +5,7 @@ go 1.26.10
 require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/daveshanley/vacuum v0.36.2
-	github.com/pb33f/doctor v0.0.88-0.20261108153705-34e4ccc4848a
+	github.com/pb33f/doctor v0.0.88-0.20261108155419-066dd4b44623
 	github.com/pb33f/go-yaml v0.1.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
@@ -66,7 +66,7 @@ require (
 	github.com/pb33f/jsonpath v0.8.5 // indirect
 	github.com/pb33f/jsonschema/v6 v6.0.3 // indirect
 	github.com/pb33f/libasyncapi v0.0.7 // indirect
-	github.com/pb33f/libopenapi v0.42.3 // indirect
+	github.com/pb33f/libopenapi v0.42.5-0.20261108155746-5e3f2d607172 // indirect
 	github.com/pb33f/libopenapi-validator v0.16.2 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
