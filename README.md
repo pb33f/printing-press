@@ -6,6 +6,7 @@
 
 ![Pipeline](https://github.com/pb33f/printing-press/workflows/CI/badge.svg)
 [![Docker Pulls](https://img.shields.io/docker/pulls/pb33f/printing-press?style=flat-square)](https://hub.docker.com/r/pb33f/printing-press)
+[![Monthly npm downloads for Printing Press](https://img.shields.io/npm/dm/@pb33f/printing-press?style=flat-square&label=npm%20downloads)](https://www.npmjs.com/package/@pb33f/printing-press)
 [![discord](https://img.shields.io/discord/923258363540815912)](https://discord.gg/x7VACVuEGP)
 [![Docs](https://img.shields.io/badge/docs-pb33f.io/printing--press-5fafd7)](https://pb33f.io/printing-press/)
 
